@@ -1,0 +1,38 @@
+# Entorno local de CENTYNELLA-CORE: API + MongoDB.
+#
+#   docker compose up -d --build     # levanta todo
+#   docker compose up -d mongo       # solo Mongo (para correr la API con `python app.py`)
+#   docker compose down              # detiene (los datos persisten en el volumen)
+#   docker compose down -v           # detiene y BORRA los datos
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: centynella-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: centynella-core
+    restart: unless-stopped
+    env_file: private/.env.sandbox
+    environment:
+      # Dentro de la red de compose, Mongo se llama "mongo" (no localhost)
+      MONGODB_URI: mongodb://mongo:27017
+    ports:
+      - '8000:8000'
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

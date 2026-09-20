@@ -1,0 +1,6 @@
+# Dependencias de runtime (se instalan en la imagen Docker).
+# Rango compatible (~=): admite parches, bloquea cambios mayores.
+fastapi~=0.141.1
+uvicorn[standard]~=0.53.0
+pydantic-settings~=2.15.0
+pymongo~=4.18.1

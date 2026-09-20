@@ -1,0 +1,28 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Cobertura
+.coverage
+coverage.xml
+htmlcov/
+
+# Variables de entorno: viven en private/ y NUNCA se versionan (excepto la plantilla)
+private/.env*
+!private/.env.example
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log

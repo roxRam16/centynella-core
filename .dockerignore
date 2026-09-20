@@ -1,0 +1,33 @@
+# Entorno local y artefactos de Python
+venv
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Secretos: las variables se inyectan en runtime (env vars / Secrets Manager), NO se hornean en la imagen
+private
+.env*
+
+# Pruebas y desarrollo (no van a la imagen de producción)
+tests
+requirements-dev.txt
+docker-compose.yml
+
+# Control de versiones y CI
+.git
+.gitignore
+.github
+
+# Docker, documentación, editor y SO
+Dockerfile
+.dockerignore
+*.md
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,73 @@
+name: Deploy CENTYNELLA-CORE
+
+# Por ahora el despliegue es MANUAL (workflow_dispatch) mientras se configura AWS.
+# Para automatizarlo, añade: push: { branches: [main] }
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente a desplegar'
+        type: choice
+        options: [sandbox, production]
+        default: sandbox
+
+permissions:
+  contents: read
+  id-token: write # OIDC hacia AWS (sin llaves de larga duración)
+
+concurrency:
+  group: deploy-core-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  # 1) Batería de pruebas: si algo falla aquí, NO se despliega.
+  test:
+    name: Ruff · Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest --cov # falla si la cobertura baja de 80 % (pyproject.toml)
+
+  # 2) Build de la imagen, push a ECR y actualización del servicio en ECS.
+  #    La configuración (MONGODB_URI, etc.) NO va en la imagen: se define en la
+  #    task definition de ECS (variables / AWS Secrets Manager).
+  deploy:
+    name: Build · Push ECR · Deploy ECS
+    needs: test
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }} # variables/secretos por ambiente en GitHub
+    env:
+      APP_ENV: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build y push de la imagen
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+        run: |
+          docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:${APP_ENV}" .
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:${APP_ENV}"
+
+      - name: Forzar nuevo despliegue en ECS
+        run: |
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_SERVICE }}" \
+            --force-new-deployment

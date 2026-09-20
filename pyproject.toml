@@ -1,0 +1,32 @@
+[project]
+name = "centynella-core"
+version = "0.1.0"
+description = "CENTYNELLA-CORE: backend (FastAPI) de administración y gestión de inventarios."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers -m 'not integration'"
+markers = [
+    "integration: requiere servicios externos reales (p. ej. MongoDB en docker compose). Ejecutar con `pytest -m integration`.",
+]
+
+[tool.coverage.run]
+source = ["src", "app"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+# E/F pycodestyle+pyflakes · I imports · B bugbear · UP pyupgrade · S seguridad · SIM simplificación
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "BLE"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # assert es la herramienta de pytest
