@@ -24,7 +24,7 @@ centynella-core/
 │   ├── config/            # Settings tipadas (pydantic-settings) leídas de private/.env.<ambiente>
 │   ├── database/          # DatabaseManager + repositorios (interfaces y MongoDB)
 │   ├── dtos/              # Contratos de entrada/salida de la API (Pydantic)
-│   ├── middlewares/       # Request-ID y manejo de errores (RFC 9457)
+│   ├── middlewares/       # Request-ID/contexto, log de acceso, seguridad HTTP y errores (RFC 9457)
 │   ├── models/            # Documentos de MongoDB, permisos y roles de sistema
 │   ├── routes/            # Routers HTTP + dependencias (DI)
 │   └── services/          # Lógica de negocio: auth, usuarios, roles, tokens, correo
@@ -106,6 +106,8 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | PATCH | `/roles/{key}` | 🛡 `roles:manage` | Editar nombre, descripción o permisos |
 | DELETE | `/roles/{key}` | 🛡 `roles:manage` | Eliminar (no de sistema ni con usuarios) |
 
+**Bitácora** (`/logs`, permiso `logs:read`): `GET /logs` (búsqueda con filtros y paginación) · `GET /logs/modules`.
+
 **Infraestructura y prueba de humo:** `GET /health` (liveness) · `GET /health/ready` (readiness, 503 si Mongo cae) · `GET /api/v1/greeting`.
 
 ## Autenticación y autorización
@@ -125,6 +127,31 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 **Administrador inicial.** Si la base no tiene usuarios y defines `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`, se crea al arrancar.
 
 **Google (preparado).** El contrato (`POST /auth/oauth/google`), el modelo (`users.providers[]`) y `GOOGLE_CLIENT_ID` están listos; falta verificar el `id_token` con `google-auth` en `AuthService.login_with_google`.
+
+## Bitácora (logs por módulo, usuario y sesión)
+
+Todo lo que ocurre queda registrado en una **base de datos aparte** (`MONGODB_LOGS_DB`: `centynella_logs_sandbox` / `centynella_logs_production`, mismo cluster), así el volumen, la retención y los permisos de los logs no afectan a los datos de negocio.
+
+**Cada evento** (`LogEntry`) lleva: fecha, **nivel** (DEBUG · INFO · WARNING · ERROR · CRITICAL), **servicio** (`core`, y los microservicios futuros), **módulo** (`auth`, `users`, `roles`, `database`, `http`, `system`, `security`), un **código de evento** estable (`auth.login.success`), mensaje, **`user_id`**, **`session_id`** (la del refresh token: el mismo id atraviesa login → refresh → logout), **`request_id`** (enlaza TODO lo de una petición con la cabecera `X-Request-ID`), IP y `details`.
+
+**Qué se registra:** arranque y apagado, **conexión a MongoDB** (`database.connected` / `database.unreachable`), índices y datos iniciales; login correcto/fallido/bloqueado, renovación y cierre de sesión, recuperación y cambio de contraseña; altas, cambios y bajas de usuarios y roles (con **actor** y **objetivo**); accesos denegados y tokens rechazados (módulo `security`); un evento `http.request` por petición (método, ruta, estado, duración; 2xx INFO · 4xx WARNING · 5xx ERROR); y los avisos/errores del `logging` de Python (`python.*`).
+
+**Qué NUNCA se registra:** contraseñas, tokens, cookies ni cuerpos de petición (las claves que parecen secreto se reemplazan por `[oculto]`); los correos se enmascaran (`a***@dominio.com`); no se guarda la query string. Sondas (`/health`), documentación y la propia consulta de la bitácora no se registran.
+
+**Cómo funciona:** `EventLogger.log()` es **síncrono y no bloquea**: encola el evento y un trabajador lo guarda por lotes. Si la base de logs se cae, la app sigue funcionando (reintenta y, si no hay remedio, descarta avisando por consola). Usuario, sesión, IP y `request_id` se toman solos del contexto de la petición (`ContextVar`). Un índice **TTL** borra los eventos viejos (`LOG_RETENTION_DAYS`).
+
+**Consulta:** `GET /api/v1/logs` (permiso `logs:read`, solo `admin` por defecto) con filtros `module`, `level` (mínimo), `event`, `service`, `user_id`, `session_id`, `request_id`, `since`, `until`, `q` y paginación; `GET /api/v1/logs/modules` lista los módulos. En el frontend: `/admin/logs`.
+
+Para registrar un evento nuevo en un servicio: `self._events.info("modulo", "modulo.accion", "Mensaje", clave=valor)`.
+
+## Seguridad de entradas y cabeceras
+
+- **Tipos estrictos:** un JSON como `{"email": {"$ne": ""}}` se rechaza (422) antes de tocar la base → sin inyección NoSQL por operadores; el buscador y los filtros usan texto literal (`re.escape`).
+- **Correo:** RFC + patrón estricto (debe llevar `@`; sin espacios, comillas ni `< >`), en minúsculas.
+- **Contraseña nueva:** 8-128 caracteres con **mayúscula, minúscula, número y símbolo**, sin espacios ni caracteres de control. Se guarda con Argon2id; puede llevar cualquier símbolo porque nunca se muestra.
+- **Nombres** (solo letras de cualquier idioma, espacios, apóstrofes, puntos y guiones) y **textos libres** (sin `< >` ni caracteres de control): no se guarda marcado HTML/scripts. La interfaz además escapa al mostrar.
+- **Cabeceras** en toda respuesta: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cache-Control: no-store` y CSP `default-src 'none'` (Swagger queda exento para poder cargar); HSTS en producción.
+- **Tamaño:** cuerpos > 1 MB (`MAX_REQUEST_BODY_BYTES`) se rechazan con 413, también si llegan por trozos.
 
 ## Convenciones RESTful
 
@@ -146,6 +173,9 @@ Variables en `private/.env.<ambiente>` (elige el ambiente con `APP_ENV`, por def
 | `MONGODB_URI` | Cadena de conexión (MongoDB Atlas, `mongodb+srv://…`) | `mongodb://localhost:27017` |
 | `MONGODB_DB` | Base de datos del ambiente | `centynella` |
 | `MONGODB_TIMEOUT_MS` | Timeout de selección de servidor | `2000` |
+| `MONGODB_LOGS_DB` | Base de datos de la bitácora (separada) | `centynella_logs` |
+| `LOG_RETENTION_DAYS` · `LOG_MIN_LEVEL` | Días que se conservan los eventos · nivel mínimo que se guarda | `30` · `INFO` |
+| `MAX_REQUEST_BODY_BYTES` | Tamaño máximo del cuerpo de una petición | `1048576` |
 | `JWT_SECRET_KEY` | **Obligatoria** (≥ 32 caracteres); firma los JWT. Distinta por ambiente | — |
 | `FRONTEND_URL` | URL pública del shell (enlace de recuperación) | `http://localhost:5173` |
 | `BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | Administrador inicial (solo con la base vacía) | — |
@@ -193,7 +223,7 @@ Se aplican **cuando el caso lo amerita** (documentado en [src/models/base.py](sr
 ## Pruebas
 
 ```bash
-pytest                       # unitarias: 154 pruebas, sin Mongo real
+pytest                       # unitarias: ~280 pruebas, sin Mongo real
 pytest --cov                 # con cobertura (mínimo 80 %; hoy ~99 %)
 
 # Integración (requiere MongoDB local: docker compose --profile local up -d mongo)
@@ -231,6 +261,14 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.4.0 — Bitácora y endurecimiento de entradas
+- Bitácora en una base de datos separada (`MONGODB_LOGS_DB`): eventos por módulo, usuario, sesión y petición; cola asíncrona que no bloquea, saneamiento de secretos, TTL, puente con `logging`; consulta en `GET /api/v1/logs` (`logs:read`).
+- El access token lleva `sid` (id de sesión) para enlazar cada petición con su sesión.
+- Contraseña con mayúscula/minúscula/número/símbolo; correo estricto; nombres y textos sin HTML; rol referenciado con formato de clave.
+- Cabeceras de seguridad y límite de tamaño del cuerpo (413).
+- El 401 esperado de `/auth/refresh` (visitante sin sesión) se registra como INFO, no como advertencia.
+- ~305 pruebas (incluye contrato de la bitácora contra MongoDB real), cobertura ~99 %.
 
 ### 0.3.0 — Autenticación, usuarios, roles y permisos
 - Registro, login, sesión persistente (access JWT + refresh token rotativo en cookie HttpOnly), logout.

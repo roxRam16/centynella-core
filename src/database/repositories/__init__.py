@@ -9,12 +9,15 @@ from dataclasses import dataclass
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.database.repositories.interfaces import (
+    LogQuery,
+    LogRepository,
     PasswordResetRepository,
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
 )
 from src.database.repositories.mongo import (
+    MongoLogRepository,
     MongoPasswordResetRepository,
     MongoRefreshTokenRepository,
     MongoRoleRepository,
@@ -48,6 +51,9 @@ def build_mongo_repositories(db: AsyncDatabase) -> Repositories:
 
 
 __all__ = [
+    "LogQuery",
+    "LogRepository",
+    "MongoLogRepository",
     "MongoPasswordResetRepository",
     "MongoRefreshTokenRepository",
     "MongoRoleRepository",

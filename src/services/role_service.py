@@ -12,12 +12,14 @@ from src.services.errors import (
     PermissionDeniedError,
     ValidationFailedError,
 )
+from src.services.event_logger import EventLogger
 
 _VALID_PERMISSIONS = {permission.value for permission in Permission}
 
 
 class RoleService:
-    def __init__(self, repositories: Repositories) -> None:
+    def __init__(self, repositories: Repositories, events: EventLogger) -> None:
+        self._events = events
         self._roles = repositories.roles
         self._users = repositories.users
 
@@ -43,7 +45,15 @@ class RoleService:
             id=key, name=name, description=description, permissions=sorted(set(permissions))
         )
         try:
-            return await self._roles.create(role)
+            created = await self._roles.create(role)
+            self._events.info(
+                "roles",
+                "roles.created",
+                "Rol creado",
+                role_key=key,
+                permissions=created.permissions,
+            )
+            return created
         except DuplicateError as error:
             raise ConflictError("Ya existe un rol con esa clave.", code="role_exists") from error
 
@@ -70,6 +80,15 @@ class RoleService:
             self._validate_permissions(permissions)
             changes["permissions"] = sorted(set(permissions))
         updated = await self._roles.update(key, changes) if changes else role
+        if changes:
+            self._events.warning(
+                "roles",
+                "roles.updated",
+                "Rol modificado",
+                role_key=key,
+                changed=sorted(changes),
+                permissions=changes.get("permissions"),
+            )
         return updated or role
 
     async def delete(self, key: str) -> None:
@@ -84,6 +103,7 @@ class RoleService:
                 code="role_in_use",
             )
         await self._roles.delete(key)
+        self._events.warning("roles", "roles.deleted", "Rol eliminado", role_key=key)
 
     @staticmethod
     def _validate_permissions(permissions: list[str]) -> None:

@@ -7,7 +7,7 @@ from tests.conftest import USER_PASSWORD, auth_headers, login
 
 REQUEST_URL = "/api/v1/auth/password-reset-requests"
 RESET_URL = "/api/v1/auth/password-resets"
-NEW_PASSWORD = "NuevaClave987"
+NEW_PASSWORD = "Nueva#Clave987"
 
 
 def test_solicitud_envia_el_enlace_al_correo(client, outbox, register_user):
@@ -70,7 +70,7 @@ def test_el_token_es_de_un_solo_uso(client, outbox, register_user):
     token = outbox.last_reset_token()
     client.post(RESET_URL, json={"token": token, "password": NEW_PASSWORD})
 
-    response = client.post(RESET_URL, json={"token": token, "password": "OtraClave12345"})
+    response = client.post(RESET_URL, json={"token": token, "password": "Otra#Clave12345"})
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_reset_token"

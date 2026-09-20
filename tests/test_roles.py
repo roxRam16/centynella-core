@@ -53,7 +53,7 @@ async def test_bootstrap_crea_el_primer_admin_solo_con_la_base_vacia(settings):
 
     admin = await repositories.users.get_by_email("admin@example.com")
     assert admin.role == ADMIN_ROLE
-    assert admin.password_hash != "Admin12345"  # se guarda el hash, no la contraseña
+    assert admin.password_hash != "Admin#12345"  # se guarda el hash, no la contraseña
 
 
 @pytest.mark.anyio

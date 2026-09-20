@@ -8,6 +8,7 @@
 
 import hashlib
 import secrets
+from dataclasses import dataclass
 from datetime import timedelta
 
 import jwt
@@ -19,16 +20,25 @@ from src.services.errors import AuthenticationError
 ACCESS_TOKEN_TYPE = "access"  # noqa: S105 - nombre del tipo de token, no un secreto
 
 
+@dataclass(frozen=True)
+class AccessClaims:
+    """Lo que dice un access token válido."""
+
+    user_id: str
+    session_id: str | None
+
+
 class TokenService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def create_access_token(self, user_id: str) -> tuple[str, int]:
-        """Devuelve `(jwt, segundos_de_vida)`."""
+    def create_access_token(self, user_id: str, session_id: str) -> tuple[str, int]:
+        """Devuelve `(jwt, segundos_de_vida)`. `sid` enlaza el token con su sesión (bitácora)."""
         now = utc_now()
         lifetime = timedelta(minutes=self._settings.access_token_ttl_minutes)
         payload = {
             "sub": user_id,
+            "sid": session_id,
             "typ": ACCESS_TOKEN_TYPE,
             "jti": new_id(),
             "iat": now,
@@ -39,8 +49,8 @@ class TokenService:
         )
         return token, int(lifetime.total_seconds())
 
-    def decode_access_token(self, token: str) -> str:
-        """Valida firma, expiración y tipo; devuelve el `user_id` (claim `sub`)."""
+    def decode_access_token(self, token: str) -> AccessClaims:
+        """Valida firma, expiración y tipo; devuelve el usuario (`sub`) y la sesión (`sid`)."""
         try:
             payload = jwt.decode(
                 token,
@@ -56,7 +66,8 @@ class TokenService:
 
         if payload["typ"] != ACCESS_TOKEN_TYPE:
             raise AuthenticationError("Token inválido.", code="invalid_token")
-        return str(payload["sub"])
+        sid = payload.get("sid")
+        return AccessClaims(str(payload["sub"]), str(sid) if sid else None)
 
     @staticmethod
     def generate_opaque_token() -> tuple[str, str]:

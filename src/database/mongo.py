@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Encapsula el cliente y la base de datos de MongoDB."""
 
-    def __init__(self, uri: str, db_name: str, timeout_ms: int = 2000) -> None:
+    def __init__(
+        self, uri: str, db_name: str, timeout_ms: int = 2000, logs_db_name: str | None = None
+    ) -> None:
         # El cliente es perezoso: no conecta hasta la primera operación.
         self._client: AsyncMongoClient = AsyncMongoClient(
             uri,
@@ -26,11 +28,17 @@ class DatabaseManager:
             tz_aware=True,  # las fechas leídas conservan su zona horaria (UTC)
         )
         self._db_name = db_name
+        self._logs_db_name = logs_db_name or f"{db_name}_logs"
 
     @property
     def db(self) -> AsyncDatabase:
         """Base de datos activa, para que los repositorios/servicios consulten colecciones."""
         return self._client[self._db_name]
+
+    @property
+    def logs_db(self) -> AsyncDatabase:
+        """Base de datos de la bitácora: SEPARADA de la de negocio, en el mismo cluster."""
+        return self._client[self._logs_db_name]
 
     async def ping(self) -> bool:
         """`True` si MongoDB responde; `False` (sin lanzar) si no está disponible."""

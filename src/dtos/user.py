@@ -5,7 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.dtos.common import EmailAddress, Password, PersonName
+from src.dtos.common import EmailAddress, Password, PersonName, RoleKey
 from src.models import UserDocument, UserStatus
 
 
@@ -51,7 +51,7 @@ class UserCreateRequest(BaseModel):
     name: PersonName
     email: EmailAddress
     password: Password
-    role: str = Field(description="Clave de un rol existente.")
+    role: RoleKey = Field(description="Clave de un rol existente.")
     status: UserStatus = "active"
 
 
@@ -59,7 +59,7 @@ class UserUpdateRequest(BaseModel):
     """Actualización parcial (PATCH): solo se cambian los campos enviados."""
 
     name: PersonName | None = None
-    role: str | None = None
+    role: RoleKey | None = None
     status: UserStatus | None = None
 
     @model_validator(mode="after")

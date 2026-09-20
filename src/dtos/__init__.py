@@ -9,6 +9,7 @@ from src.dtos.auth import (
 )
 from src.dtos.greeting import GreetingDTO
 from src.dtos.health import HealthDTO, ReadinessDTO
+from src.dtos.log import LogEntryDTO, LogPageDTO
 from src.dtos.problem import ProblemDetailsDTO
 from src.dtos.role import PermissionDTO, RoleCreateRequest, RoleDTO, RoleUpdateRequest
 from src.dtos.user import (
@@ -24,6 +25,8 @@ __all__ = [
     "GoogleLoginRequest",
     "GreetingDTO",
     "HealthDTO",
+    "LogEntryDTO",
+    "LogPageDTO",
     "LoginRequest",
     "PasswordChangeRequest",
     "PasswordResetCreate",

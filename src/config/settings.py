@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     app_name: str = "CENTYNELLA-CORE"
     app_env: AppEnvironment = "sandbox"
     app_version: str = "0.1.0"
+    # Nombre con el que este servicio firma sus eventos en la bitácora.
+    service_name: str = "core"
 
     # Swagger / ReDoc. Desactivable por ambiente si se requiere.
     docs_enabled: bool = True
@@ -35,6 +37,13 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "centynella"
     mongodb_timeout_ms: int = 2000
+    # Bitácora: base de datos SEPARADA (mismo cluster). Una por ambiente.
+    mongodb_logs_db: str = "centynella_logs"
+    log_retention_days: int = Field(default=30, ge=1)
+    log_flush_interval_seconds: float = Field(default=1.0, ge=0)
+    log_min_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # Tamaño máximo del cuerpo de una petición (protección contra abusos).
+    max_request_body_bytes: int = Field(default=1_048_576, ge=1024)
 
     # Orígenes permitidos por CORS (el shell del MFE). Separados por coma en el .env.
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]

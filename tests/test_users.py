@@ -122,7 +122,9 @@ def test_gerente_puede_ver_pero_no_modificar(client, admin_headers, register_use
 # ── Listado ─────────────────────────────────────────────────────────────────────
 def test_listado_paginado(client, admin_headers):
     for index in range(4):
-        create_user(client, admin_headers, name=f"Usuario {index}", email=f"u{index}@example.com")
+        create_user(
+            client, admin_headers, name=f"Usuario {'ABCD'[index]}", email=f"u{index}@example.com"
+        )
 
     page1 = client.get(USERS_URL, params={"page": 1, "page_size": 3}, headers=admin_headers).json()
     page2 = client.get(USERS_URL, params={"page": 2, "page_size": 3}, headers=admin_headers).json()

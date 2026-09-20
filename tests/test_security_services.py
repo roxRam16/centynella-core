@@ -60,10 +60,12 @@ async def test_needs_rehash_detecta_parametros_antiguos():
 
 # ── TokenService ────────────────────────────────────────────────────────────────
 def test_access_token_ida_y_vuelta(tokens):
-    token, expires_in = tokens.create_access_token("user-1")
+    token, expires_in = tokens.create_access_token("user-1", "session-1")
 
     assert expires_in == 15 * 60
-    assert tokens.decode_access_token(token) == "user-1"
+    claims = tokens.decode_access_token(token)
+    assert claims.user_id == "user-1"
+    assert claims.session_id == "session-1"  # enlaza el token con la sesión (bitácora)
 
 
 def test_access_token_expirado(tokens, settings):
@@ -145,6 +147,6 @@ def test_token_opaco_y_su_hash():
 def test_el_ttl_del_access_token_es_configurable():
     settings = Settings(_env_file=None, jwt_secret_key=SECRET, access_token_ttl_minutes=1)  # type: ignore[call-arg]
 
-    _, expires_in = TokenService(settings).create_access_token("u")
+    _, expires_in = TokenService(settings).create_access_token("u", "s")
 
     assert expires_in == 60

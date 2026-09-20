@@ -29,3 +29,6 @@ python app.py                                  # API en :8000 (Swagger en /docs)
 - **MongoDB Atlas** (un cluster, una base por ambiente): `centynella_sandbox` y `centynella_production`. La conexión vive SOLO en este backend; el frontend jamás se conecta a Mongo.
 - **Actualizar el README en cada despliegue de cambios** (incluida la sección "Historial de cambios").
 - Todo proyecto nuevo debe seguir esta misma estructura.
+
+- **Bitácora:** todo evento relevante se registra con `self._events.info("modulo", "modulo.accion", "Mensaje", **detalles)` (usuario/sesión/request salen del contexto). NUNCA registrar contraseñas, tokens ni cuerpos; correos con `mask_email`. Vive en una base de datos aparte (`MONGODB_LOGS_DB`). Todo endpoint/servicio nuevo debe dejar rastro de sus acciones de escritura y de los eventos de seguridad.
+- **Entradas:** todo texto entra por los tipos de `dtos/common.py` (`EmailAddress`, `Password`, `PersonName`, `SafeText`, `RoleKey`); nunca aceptar `str` sin restricciones en un DTO nuevo.

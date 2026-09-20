@@ -58,7 +58,14 @@ def test_registro_rechaza_correo_duplicado(client, register_user):
 
 @pytest.mark.parametrize(
     ("password", "motivo"),
-    [("corta1", "menos de 8"), ("sololetrasaqui", "sin número"), ("12345678901", "sin letra")],
+    [
+        ("Corta#1", "menos de 8"),
+        ("sinmayuscula#1", "sin mayúscula"),
+        ("SINMINUSCULA#1", "sin minúscula"),
+        ("SinNumero#Aqui", "sin número"),
+        ("SinSimbolo12345", "sin símbolo"),
+        ("Con Espacio#123", "con espacios"),
+    ],
 )
 def test_registro_aplica_la_politica_de_contrasena(client, password, motivo):
     response = client.post(

@@ -13,15 +13,22 @@ from uuid import uuid4
 import pytest
 from pymongo import AsyncMongoClient
 
-from src.database import DuplicateError, Repositories, build_mongo_repositories
+from src.database import (
+    DuplicateError,
+    LogQuery,
+    MongoLogRepository,
+    Repositories,
+    build_mongo_repositories,
+)
 from src.models import (
+    LogEntry,
     PasswordResetDocument,
     RefreshTokenDocument,
     RoleDocument,
     UserDocument,
     utc_now,
 )
-from tests.fakes import build_in_memory_repositories
+from tests.fakes import InMemoryLogRepository, build_in_memory_repositories
 
 pytestmark = pytest.mark.anyio
 
@@ -270,3 +277,116 @@ async def test_reset_invalidar_pendientes_del_usuario(repos):
     assert (await repos.password_resets.get_by_hash("r1")).used_at is not None
     assert (await repos.password_resets.get_by_hash("r2")).used_at is not None
     assert (await repos.password_resets.get_by_hash("r3")).used_at is None
+
+
+# ── Bitácora (base de datos de logs) ────────────────────────────────────────────
+@pytest.fixture(params=BACKENDS)
+async def logs(request):
+    if request.param == "memory":
+        yield InMemoryLogRepository()
+        return
+
+    uri = os.getenv("TEST_MONGODB_URI", "mongodb://localhost:27017")
+    client: AsyncMongoClient = AsyncMongoClient(uri, tz_aware=True, serverSelectionTimeoutMS=2000)
+    db_name = f"centynella_test_logs_{uuid4().hex[:10]}"
+    repository = MongoLogRepository(client[db_name], retention_days=1)
+    await repository.ensure_indexes()
+    yield repository
+    await client.drop_database(db_name)
+    await client.close()
+
+
+def make_entry(event: str = "auth.login.success", **overrides) -> LogEntry:
+    return LogEntry(
+        **{
+            "level": "INFO",
+            "service": "core",
+            "module": "auth",
+            "event": event,
+            "message": "Sesión iniciada",
+            "environment": "sandbox",
+            **overrides,
+        }
+    )
+
+
+async def find(logs, **filters):
+    entries, total = await logs.search(LogQuery(**filters), page=1, page_size=50)
+    return entries, total
+
+
+async def test_log_insertar_y_leer(logs):
+    entry = make_entry(user_id="u1", session_id="s1", details={"a": {"b": 1}, "lista": [1, 2]})
+
+    await logs.insert_many([entry, make_entry("auth.logout")])
+    await logs.insert_many([])  # vacío: no falla
+
+    entries, total = await find(logs)
+    assert total == 2
+    saved = next(e for e in entries if e.event == "auth.login.success")
+    assert saved.details == {"a": {"b": 1}, "lista": [1, 2]}
+    assert saved.timestamp.tzinfo is not None and saved.user_id == "u1"
+
+
+async def test_log_filtra_por_cada_campo(logs):
+    await logs.insert_many(
+        [
+            make_entry("a", module="auth", user_id="u1", session_id="s1", request_id="r1"),
+            make_entry(
+                "b", module="users", user_id="u2", session_id="s2", request_id="r2", service="otro"
+            ),
+            make_entry("c", module="auth", user_id="u1", session_id="s3", request_id="r3"),
+        ]
+    )
+
+    assert (await find(logs, module="auth"))[1] == 2
+    assert (await find(logs, user_id="u1"))[1] == 2
+    assert (await find(logs, session_id="s2"))[1] == 1
+    assert (await find(logs, request_id="r3"))[1] == 1
+    assert (await find(logs, service="otro"))[1] == 1
+    assert (await find(logs, event="b"))[1] == 1
+    assert (await find(logs, module="auth", user_id="u1", session_id="s3"))[1] == 1  # AND
+
+
+async def test_log_filtra_por_niveles_texto_y_fechas(logs):
+    now = utc_now()
+    await logs.insert_many(
+        [
+            make_entry(
+                "info", level="INFO", message="Todo bien", timestamp=now - timedelta(days=2)
+            ),
+            make_entry(
+                "warn", level="WARNING", message="Login FALLIDO", timestamp=now - timedelta(hours=1)
+            ),
+            make_entry("err", level="ERROR", message="Se cayó (Mongo) [x]", timestamp=now),
+        ]
+    )
+
+    assert (await find(logs, levels=["WARNING", "ERROR"]))[1] == 2
+    assert [e.event for e in (await find(logs, text="fallido"))[0]] == ["warn"]  # sin mayúsculas
+    assert (await find(logs, text="(mongo) [x]"))[1] == 1  # el texto es literal, no regex
+    assert (await find(logs, text=".*"))[1] == 0
+    assert (await find(logs, since=now - timedelta(days=1)))[1] == 2
+    assert (await find(logs, until=now - timedelta(days=1)))[1] == 1
+
+
+async def test_log_pagina_mas_recientes_primero(logs):
+    start = utc_now()
+    await logs.insert_many(
+        [make_entry(f"e{index}", timestamp=start + timedelta(seconds=index)) for index in range(5)]
+    )
+
+    first, total = await logs.search(LogQuery(), page=1, page_size=2)
+    last, _ = await logs.search(LogQuery(), page=3, page_size=2)
+
+    assert total == 5
+    assert [e.event for e in first] == ["e4", "e3"]
+    assert [e.event for e in last] == ["e0"]
+
+
+async def test_log_lista_los_modulos(logs):
+    await logs.insert_many(
+        [make_entry(module="users"), make_entry(module="auth"), make_entry(module="auth")]
+    )
+
+    assert await logs.modules() == ["auth", "users"]

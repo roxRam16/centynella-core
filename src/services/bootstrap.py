@@ -6,12 +6,13 @@ from contextlib import suppress
 from src.config import Settings
 from src.database import DuplicateError, Repositories
 from src.models import ADMIN_ROLE, SYSTEM_ROLES, RoleDocument, UserDocument
+from src.services.event_logger import EventLogger
 from src.services.password_hasher import PasswordHasher
 
 logger = logging.getLogger(__name__)
 
 
-async def seed_roles(repositories: Repositories) -> None:
+async def seed_roles(repositories: Repositories, events: EventLogger | None = None) -> None:
     """Crea los roles de sistema que falten. Idempotente y seguro con varias instancias.
 
     · Los roles existentes NO se pisan (un administrador pudo ajustar sus permisos).
@@ -30,6 +31,10 @@ async def seed_roles(repositories: Repositories) -> None:
                         is_system=True,
                     )
                 )
+                if events:
+                    events.info(
+                        "system", "roles.seeded", "Rol de sistema creado", role_key=system_role.key
+                    )
         elif system_role.key == ADMIN_ROLE and sorted(existing.permissions) != sorted(
             system_role.permissions
         ):
@@ -39,7 +44,10 @@ async def seed_roles(repositories: Repositories) -> None:
 
 
 async def bootstrap_admin(
-    settings: Settings, repositories: Repositories, hasher: PasswordHasher
+    settings: Settings,
+    repositories: Repositories,
+    hasher: PasswordHasher,
+    events: EventLogger | None = None,
 ) -> bool:
     """Crea el primer administrador si no hay ningún usuario y hay credenciales configuradas.
 
@@ -62,4 +70,11 @@ async def bootstrap_admin(
     except DuplicateError:
         return False
     logger.info("Administrador inicial creado: %s", settings.bootstrap_admin_email)
+    if events:
+        events.warning(
+            "system",
+            "system.bootstrap_admin_created",
+            "Administrador inicial creado",
+            email=settings.bootstrap_admin_email,
+        )
     return True

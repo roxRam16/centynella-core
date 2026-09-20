@@ -3,11 +3,15 @@
 from src.database import DuplicateError, Repositories
 from src.models import ADMIN_ROLE, UserDocument, UserStatus
 from src.services.errors import ConflictError, NotFoundError, ValidationFailedError
+from src.services.event_logger import EventLogger
 from src.services.password_hasher import PasswordHasher
 
 
 class UserService:
-    def __init__(self, repositories: Repositories, hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repositories: Repositories, hasher: PasswordHasher, events: EventLogger
+    ) -> None:
+        self._events = events
         self._users = repositories.users
         self._roles = repositories.roles
         self._refresh_tokens = repositories.refresh_tokens
@@ -43,7 +47,16 @@ class UserService:
             status=status,
         )
         try:
-            return await self._users.create(user)
+            created = await self._users.create(user)
+            self._events.info(
+                "users",
+                "users.created",
+                "Usuario creado por un administrador",
+                target_user_id=created.id,
+                role=role,
+                status=status,
+            )
+            return created
         except DuplicateError as error:
             raise ConflictError(
                 "Ya existe una cuenta con ese correo.", code="email_taken"
@@ -87,6 +100,16 @@ class UserService:
             raise NotFoundError("Usuario no encontrado.", code="user_not_found")
         if changes.get("status") == "disabled":
             await self._refresh_tokens.revoke_all_for_user(user_id)  # cierra sus sesiones
+        if changes:
+            self._events.info(
+                "users",
+                "users.updated",
+                "Usuario modificado",
+                target_user_id=user_id,
+                changed=sorted(changes),
+                new_role=changes.get("role"),
+                new_status=changes.get("status"),
+            )
         return updated
 
     async def delete(self, actor_id: str, user_id: str) -> None:
@@ -97,6 +120,7 @@ class UserService:
             raise ConflictError("Debe existir al menos un administrador activo.", code="last_admin")
         await self._users.delete(user_id)
         await self._refresh_tokens.revoke_all_for_user(user_id)
+        self._events.warning("users", "users.deleted", "Usuario eliminado", target_user_id=user_id)
 
     async def _require_role(self, role_key: str) -> None:
         if await self._roles.get(role_key) is None:

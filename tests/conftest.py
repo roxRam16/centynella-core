@@ -8,11 +8,16 @@ from fastapi.testclient import TestClient
 from app import create_app
 from src.config import Settings
 from src.database import Repositories
-from tests.fakes import FakeDatabase, OutboxEmailSender, build_in_memory_repositories
+from tests.fakes import (
+    FakeDatabase,
+    InMemoryLogRepository,
+    OutboxEmailSender,
+    build_in_memory_repositories,
+)
 
 ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "Admin12345"
-USER_PASSWORD = "Segura12345"
+ADMIN_PASSWORD = "Admin#12345"
+USER_PASSWORD = "Segura#12345"
 
 
 @pytest.fixture
@@ -42,6 +47,7 @@ def settings() -> Settings:
         bootstrap_admin_email=ADMIN_EMAIL,
         bootstrap_admin_password=ADMIN_PASSWORD,
         frontend_url="http://localhost:5173",
+        log_flush_interval_seconds=0,  # la bitácora se escribe al instante en las pruebas
     )
 
 
@@ -56,12 +62,17 @@ def repositories() -> Repositories:
 
 
 @pytest.fixture
+def log_repository() -> InMemoryLogRepository:
+    return InMemoryLogRepository()
+
+
+@pytest.fixture
 def outbox() -> OutboxEmailSender:
     return OutboxEmailSender()
 
 
 @pytest.fixture
-def make_app(settings, database, repositories, outbox):
+def make_app(settings, database, repositories, outbox, log_repository):
     """Fábrica de apps con dobles en memoria; cada argumento puede sobrescribirse."""
 
     def factory(**overrides) -> FastAPI:
@@ -70,6 +81,7 @@ def make_app(settings, database, repositories, outbox):
             "database": database,
             "repositories": repositories,
             "email_sender": outbox,
+            "log_repository": log_repository,
         }
         return create_app(**{**options, **overrides})  # type: ignore[arg-type]
 
@@ -112,3 +124,13 @@ def register_user(client):
         return response.json()
 
     return register
+
+
+@pytest.fixture
+def flush_logs(client):
+    """Espera a que la bitácora termine de guardar lo pendiente (corre en el loop de la app)."""
+
+    def flush() -> None:
+        client.portal.call(client.app.state.events.flush)
+
+    return flush

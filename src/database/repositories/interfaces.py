@@ -4,9 +4,17 @@ Los servicios dependen de estos `Protocol`, no de MongoDB: así se pueden probar
 implementaciones en memoria (tests/fakes.py) y el almacenamiento es intercambiable.
 """
 
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
-from src.models import PasswordResetDocument, RefreshTokenDocument, RoleDocument, UserDocument
+from src.models import (
+    LogEntry,
+    PasswordResetDocument,
+    RefreshTokenDocument,
+    RoleDocument,
+    UserDocument,
+)
 
 
 class UserRepository(Protocol):
@@ -65,3 +73,33 @@ class PasswordResetRepository(Protocol):
 
     async def invalidate_for_user(self, user_id: str) -> None:
         """Marca como usadas las solicitudes pendientes del usuario."""
+
+
+@dataclass
+class LogQuery:
+    """Filtros de búsqueda de la bitácora. Todos son opcionales y se combinan con AND."""
+
+    module: str | None = None
+    levels: list[str] | None = None
+    event: str | None = None
+    service: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    since: datetime | None = None
+    until: datetime | None = None
+    text: str | None = None
+
+
+class LogRepository(Protocol):
+    """Bitácora (base de datos de logs, separada de la de negocio)."""
+
+    async def insert_many(self, entries: list[LogEntry]) -> None: ...
+
+    async def search(
+        self, query: LogQuery, *, page: int, page_size: int
+    ) -> tuple[list[LogEntry], int]:
+        """Página de eventos (más recientes primero) y total que cumple los filtros."""
+
+    async def modules(self) -> list[str]:
+        """Módulos que han registrado eventos (para el filtro de la interfaz)."""

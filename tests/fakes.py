@@ -7,8 +7,9 @@ que el doble se comporta como la base real.
 
 from typing import Any
 
-from src.database import DuplicateError, Repositories
+from src.database import DuplicateError, LogQuery, Repositories
 from src.models import (
+    LogEntry,
     PasswordResetDocument,
     RefreshTokenDocument,
     RoleDocument,
@@ -195,3 +196,43 @@ class FakeDatabase:
 
     async def close(self) -> None:
         self.closed = True
+
+
+class InMemoryLogRepository:
+    """Bitácora en memoria con las mismas reglas de búsqueda que la de MongoDB."""
+
+    def __init__(self) -> None:
+        self.items: list[LogEntry] = []
+        self.fail = False
+
+    async def insert_many(self, entries: list[LogEntry]) -> None:
+        if self.fail:
+            raise RuntimeError("base de logs caída")
+        self.items.extend(entry.model_copy(deep=True) for entry in entries)
+
+    async def search(self, query: LogQuery, *, page: int, page_size: int):
+        matches = [entry for entry in self.items if self._matches(entry, query)]
+        matches.sort(key=lambda entry: (entry.timestamp, entry.id), reverse=True)
+        start = (page - 1) * page_size
+        return [e.model_copy(deep=True) for e in matches[start : start + page_size]], len(matches)
+
+    async def modules(self) -> list[str]:
+        return sorted({entry.module for entry in self.items})
+
+    def by_event(self, event: str) -> list[LogEntry]:
+        """Atajo para las pruebas: eventos con ese código."""
+        return [entry for entry in self.items if entry.event == event]
+
+    @staticmethod
+    def _matches(entry: LogEntry, query: LogQuery) -> bool:
+        for field in ("module", "event", "service", "user_id", "session_id", "request_id"):
+            wanted = getattr(query, field)
+            if wanted and getattr(entry, field) != wanted:
+                return False
+        if query.levels and entry.level not in query.levels:
+            return False
+        if query.since and entry.timestamp < query.since:
+            return False
+        if query.until and entry.timestamp > query.until:
+            return False
+        return not (query.text and query.text.strip().lower() not in entry.message.lower())

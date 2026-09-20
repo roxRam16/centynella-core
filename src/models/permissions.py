@@ -18,6 +18,7 @@ class Permission(StrEnum):
     USERS_DELETE = "users:delete"
     ROLES_READ = "roles:read"
     ROLES_MANAGE = "roles:manage"
+    LOGS_READ = "logs:read"
 
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -27,6 +28,7 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.USERS_DELETE: "Eliminar usuarios",
     Permission.ROLES_READ: "Ver roles y permisos",
     Permission.ROLES_MANAGE: "Crear, editar y eliminar roles",
+    Permission.LOGS_READ: "Consultar la bitácora del sistema",
 }
 
 ADMIN_ROLE = "admin"

@@ -15,7 +15,9 @@ from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import DuplicateKeyError
 
 from src.database.errors import DuplicateError
+from src.database.repositories.interfaces import LogQuery
 from src.models import (
+    LogEntry,
     PasswordResetDocument,
     RefreshTokenDocument,
     RoleDocument,
@@ -196,3 +198,73 @@ class MongoPasswordResetRepository:
         await self._collection.update_many(
             {"user_id": user_id, "used_at": None}, {"$set": {"used_at": utc_now()}}
         )
+
+
+class MongoLogRepository:
+    """Bitácora en la base de datos de logs.
+
+    Índices pensados para las consultas de la interfaz: por módulo, usuario, sesión, petición y
+    nivel (siempre ordenadas por fecha). Un índice TTL borra los eventos viejos solo, así la
+    bitácora no crece sin límite.
+    """
+
+    def __init__(self, db: AsyncDatabase, retention_days: int = 30) -> None:
+        self._collection: AsyncCollection = db["logs"]
+        self._retention_seconds = retention_days * 24 * 3600
+
+    async def ensure_indexes(self) -> None:
+        for keys in (
+            [("module", 1), ("timestamp", -1)],
+            [("user_id", 1), ("timestamp", -1)],
+            [("session_id", 1), ("timestamp", -1)],
+            [("level", 1), ("timestamp", -1)],
+            [("service", 1), ("timestamp", -1)],
+            [("request_id", 1)],
+            [("event", 1)],
+        ):
+            await self._collection.create_index(keys)
+        await self._collection.create_index(
+            "timestamp", expireAfterSeconds=self._retention_seconds
+        )  # TTL + orden por fecha
+
+    async def insert_many(self, entries: list[LogEntry]) -> None:
+        if entries:
+            await self._collection.insert_many(
+                [entry.model_dump(by_alias=True) for entry in entries], ordered=False
+            )
+
+    async def search(
+        self, query: LogQuery, *, page: int, page_size: int
+    ) -> tuple[list[LogEntry], int]:
+        criteria = self._criteria(query)
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("timestamp", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [LogEntry.model_validate(document) async for document in cursor], total
+
+    async def modules(self) -> list[str]:
+        return sorted(await self._collection.distinct("module"))
+
+    @staticmethod
+    def _criteria(query: LogQuery) -> dict[str, Any]:
+        criteria: dict[str, Any] = {}
+        for field in ("module", "event", "service", "user_id", "session_id", "request_id"):
+            value = getattr(query, field)
+            if value:
+                criteria[field] = value
+        if query.levels:
+            criteria["level"] = {"$in": query.levels}
+        if query.since or query.until:
+            window: dict[str, Any] = {}
+            if query.since:
+                window["$gte"] = query.since
+            if query.until:
+                window["$lte"] = query.until
+            criteria["timestamp"] = window
+        if query.text:
+            criteria["message"] = {"$regex": re.escape(query.text.strip()), "$options": "i"}
+        return criteria

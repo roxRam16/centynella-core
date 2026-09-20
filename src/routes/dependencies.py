@@ -14,6 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.config import Settings
 from src.database import DatabaseManager
+from src.middlewares.context import bind_user
 from src.models import Permission, UserDocument
 from src.services import GreetingService, HealthService, Services
 from src.services.errors import AuthenticationError, NotFoundError, PermissionDeniedError
@@ -59,6 +60,7 @@ class CurrentUser:
 
     user: UserDocument
     permissions: list[str]
+    session_id: str | None = None
 
     @property
     def id(self) -> str:
@@ -75,9 +77,12 @@ async def get_current_user(
             "Debes iniciar sesión.", code="not_authenticated", headers=_WWW_AUTHENTICATE
         )
     try:
-        user_id = services.tokens.decode_access_token(credentials.credentials)
-        user = await services.users.get(user_id)
+        claims = services.tokens.decode_access_token(credentials.credentials)
+        user = await services.users.get(claims.user_id)
     except AuthenticationError as error:
+        services.events.warning(
+            "security", "security.token_rejected", "Access token rechazado", reason=error.code
+        )
         raise AuthenticationError(
             error.detail, code=error.code, headers=_WWW_AUTHENTICATE
         ) from error
@@ -90,7 +95,10 @@ async def get_current_user(
         raise AuthenticationError(
             "Tu cuenta está deshabilitada.", code="account_disabled", headers=_WWW_AUTHENTICATE
         )
-    return CurrentUser(user, await services.users.permissions_of(user))
+    bind_user(
+        user.id, claims.session_id
+    )  # todo lo que ocurra en la petición lleva usuario y sesión
+    return CurrentUser(user, await services.users.permissions_of(user), claims.session_id)
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
@@ -102,9 +110,15 @@ def require_permission(*required: Permission) -> Callable[..., Awaitable[Current
     Uso: `Depends(require_permission(Permission.USERS_READ))`.
     """
 
-    async def dependency(current: CurrentUserDep) -> CurrentUser:
+    async def dependency(current: CurrentUserDep, services: ServicesDep) -> CurrentUser:
         missing = [p.value for p in required if p.value not in current.permissions]
         if missing:
+            services.events.warning(
+                "security",
+                "security.permission_denied",
+                "Acceso denegado por falta de permiso",
+                missing=missing,
+            )
             raise PermissionDeniedError(
                 f"No tienes permiso para esta acción ({', '.join(missing)}).",
                 code="insufficient_permissions",
