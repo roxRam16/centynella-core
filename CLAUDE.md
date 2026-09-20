@@ -7,7 +7,7 @@ Backend FastAPI + MongoDB de la plataforma de inventarios CENTYNELLA. Su fronten
 ```bash
 venv/Scripts/python.exe -m pytest --cov        # pruebas (cobertura mínima 80 %)
 venv/Scripts/python.exe -m ruff check . && venv/Scripts/python.exe -m ruff format --check .
-docker compose up -d mongo                     # Mongo local
+docker compose --profile local up -d mongo     # Mongo local (opcional; por defecto se usa Atlas)
 python app.py                                  # API en :8000 (Swagger en /docs)
 ```
 
@@ -24,5 +24,6 @@ python app.py                                  # API en :8000 (Swagger en /docs)
 - **Patrones MongoDB** cuando se amerite: set, subset, reference, extended reference.
 - Tests **antes** de desplegar; unitarias con `FakeDatabase`, integración con marca `integration`.
 - `.env` solo en `private/` (ignorado por git y Docker). Nunca secretos en el repo ni en la imagen.
+- **MongoDB Atlas** (un cluster, una base por ambiente): `centynella_sandbox` y `centynella_production`. La conexión vive SOLO en este backend; el frontend jamás se conecta a Mongo.
 - **Actualizar el README en cada despliegue de cambios** (incluida la sección "Historial de cambios").
 - Todo proyecto nuevo debe seguir esta misma estructura.

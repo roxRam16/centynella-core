@@ -49,8 +49,8 @@ pip install -r requirements-dev.txt
 # 2. Variables de entorno
 copy private\.env.example private\.env.sandbox     # y ajusta los valores
 
-# 3. MongoDB local con Docker
-docker compose up -d mongo
+# 3. MongoDB: por defecto se usa Atlas (private/.env.sandbox → base centynella_sandbox).
+#    Opcional, Mongo local: docker compose --profile local up -d mongo
 
 # 4. API con recarga automática
 python app.py                         # o: uvicorn app:app --reload --port 8000
@@ -90,13 +90,24 @@ Variables en `private/.env.<ambiente>` (elige el ambiente con `APP_ENV`, por def
 | Variable | Descripción | Por defecto |
 | --- | --- | --- |
 | `APP_ENV` | `sandbox` (developer) o `production` | `sandbox` |
-| `MONGODB_URI` | Cadena de conexión | `mongodb://localhost:27017` |
-| `MONGODB_DB` | Nombre de la base | `centynella` |
+| `MONGODB_URI` | Cadena de conexión (MongoDB Atlas, `mongodb+srv://…`) | `mongodb://localhost:27017` |
+| `MONGODB_DB` | Base de datos del ambiente | `centynella` |
 | `MONGODB_TIMEOUT_MS` | Timeout de selección de servidor | `2000` |
 | `CORS_ORIGINS` | Orígenes permitidos (coma) — el shell del MFE | `http://localhost:5173` |
 | `DOCS_ENABLED` | Habilita Swagger/ReDoc | `true` |
 
 > `private/.env.*` está en `.gitignore` y `.dockerignore`: **nunca** se versiona ni entra a la imagen.
+
+### Bases de datos por ambiente
+
+Un mismo cluster de **MongoDB Atlas** con una base de datos separada por ambiente. La cadena de conexión solo vive en este backend (el frontend nunca se conecta a Mongo).
+
+| Ambiente | `APP_ENV` | `MONGODB_DB` |
+| --- | --- | --- |
+| Developer | `sandbox` | `centynella_sandbox` |
+| Producción | `production` | `centynella_production` |
+
+Atlas debe tener tu IP (o la de AWS) en *Network Access*. En producción, inyecta `MONGODB_URI` desde AWS Secrets Manager y usa un usuario de base de datos distinto por ambiente, con permisos solo sobre su base.
 
 ## Patrones de diseño aplicados
 
@@ -124,7 +135,7 @@ Se aplican **cuando el caso lo amerita** (documentado en [src/models/base.py](sr
 ```bash
 pytest                       # unitarias (no requieren Mongo real)
 pytest --cov                 # con cobertura (mínimo 80 %)
-pytest -m integration        # requiere: docker compose up -d mongo
+pytest -m integration        # ping a la MongoDB del ambiente activo (APP_ENV, por defecto sandbox)
 ruff check . && ruff format --check .
 ```
 
@@ -133,8 +144,9 @@ Las unitarias inyectan un `FakeDatabase`; así corren en cualquier lugar y en el
 ## Docker
 
 ```bash
-docker compose up -d --build     # API (:8000) + MongoDB (:27017)
-docker compose down              # detiene (datos persisten)   ·   down -v → borra datos
+docker compose up -d --build                 # API (:8000) contra MongoDB Atlas (sandbox)
+docker compose --profile local up -d mongo   # opcional: Mongo local (:27017)
+docker compose down                          # detiene la API
 
 # Solo la imagen de la API
 docker build -t centynella-core .
@@ -157,6 +169,12 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.2.0 — MongoDB Atlas
+- Conexión a MongoDB Atlas con una base por ambiente: `centynella_sandbox` y `centynella_production`.
+- `docker compose` usa Atlas por defecto; el Mongo local pasa a ser opcional (`--profile local`).
+- La prueba de integración ahora hace ping a la base del ambiente activo.
+- Timeout de conexión por defecto de los `.env` sube a 5 s (resolución SRV + TLS de Atlas).
 
 ### 0.1.0 — Base del proyecto
 - Estructura modular `config / database / dtos / middlewares / models / routes / services`.

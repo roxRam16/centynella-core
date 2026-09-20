@@ -1,12 +1,14 @@
-# Entorno local de CENTYNELLA-CORE: API + MongoDB.
+# Entorno local de CENTYNELLA-CORE: API (contra MongoDB Atlas) + Mongo local opcional.
 #
-#   docker compose up -d --build     # levanta todo
-#   docker compose up -d mongo       # solo Mongo (para correr la API con `python app.py`)
-#   docker compose down              # detiene (los datos persisten en el volumen)
-#   docker compose down -v           # detiene y BORRA los datos
+#   docker compose up -d --build                  # solo la API (usa Atlas)
+#   docker compose --profile local up -d mongo    # además, Mongo local (opcional)
+#   docker compose down                           # detiene (los datos locales persisten en el volumen)
+#   docker compose --profile local down -v        # detiene y BORRA los datos locales
 
 services:
+  # MongoDB local OPCIONAL (perfil "local"): no arranca con un `up` normal.
   mongo:
+    profiles: ['local']
     image: mongo:7
     container_name: centynella-mongo
     restart: unless-stopped
@@ -24,15 +26,11 @@ services:
     build: .
     container_name: centynella-core
     restart: unless-stopped
+    # Usa la MongoDB Atlas de private/.env.sandbox (base centynella_sandbox).
+    # Para usar el Mongo local: `--profile local` y define MONGODB_URI=mongodb://mongo:27017.
     env_file: private/.env.sandbox
-    environment:
-      # Dentro de la red de compose, Mongo se llama "mongo" (no localhost)
-      MONGODB_URI: mongodb://mongo:27017
     ports:
       - '8000:8000'
-    depends_on:
-      mongo:
-        condition: service_healthy
 
 volumes:
   mongo-data:

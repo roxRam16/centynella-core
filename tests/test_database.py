@@ -1,5 +1,6 @@
 import pytest
 
+from src.config import get_settings
 from src.database import DatabaseManager
 
 
@@ -24,9 +25,17 @@ async def test_expone_la_base_de_datos_configurada():
 
 @pytest.mark.integration
 @pytest.mark.anyio
-async def test_ping_con_mongo_real():
-    """Requiere `docker compose up -d mongo`. Ejecutar con `pytest -m integration`."""
-    manager = DatabaseManager("mongodb://localhost:27017", "centynella_test", timeout_ms=2000)
+async def test_ping_con_la_mongodb_del_ambiente_activo():
+    """Conecta a la MongoDB definida en `private/.env.<APP_ENV>` (Atlas).
+
+    Ejecutar con `pytest -m integration` (ambiente por defecto: sandbox).
+    Solo hace `ping`: no lee ni escribe datos.
+    """
+    get_settings.cache_clear()
+    settings = get_settings()
+    manager = DatabaseManager(
+        settings.mongodb_uri, settings.mongodb_db, settings.mongodb_timeout_ms
+    )
     try:
         assert await manager.ping() is True
     finally:
