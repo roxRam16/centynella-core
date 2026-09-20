@@ -2,8 +2,7 @@ from datetime import datetime
 
 from fastapi.testclient import TestClient
 
-from app import create_app
-from tests.conftest import FakeDatabase
+from tests.fakes import FakeDatabase
 
 
 def test_liveness_ok(client):
@@ -18,9 +17,9 @@ def test_liveness_ok(client):
     assert response.headers["cache-control"] == "no-store"
 
 
-def test_liveness_no_consulta_dependencias(settings):
+def test_liveness_no_consulta_dependencias(make_app):
     """Con Mongo caído, liveness sigue respondiendo 200 (el proceso está vivo)."""
-    with TestClient(create_app(settings, FakeDatabase(up=False))) as client:  # type: ignore[arg-type]
+    with TestClient(make_app(database=FakeDatabase(up=False))) as client:
         assert client.get("/health").status_code == 200
 
 
@@ -32,8 +31,8 @@ def test_readiness_ready_cuando_mongo_responde(client):
     assert response.json()["dependencies"] == {"mongodb": "up"}
 
 
-def test_readiness_503_cuando_mongo_esta_caido(settings):
-    with TestClient(create_app(settings, FakeDatabase(up=False))) as client:  # type: ignore[arg-type]
+def test_readiness_503_cuando_mongo_esta_caido(make_app):
+    with TestClient(make_app(database=FakeDatabase(up=False))) as client:
         response = client.get("/health/ready")
 
     assert response.status_code == 503
@@ -41,9 +40,8 @@ def test_readiness_503_cuando_mongo_esta_caido(settings):
     assert response.json()["dependencies"] == {"mongodb": "down"}
 
 
-def test_el_lifespan_cierra_la_base_de_datos(settings):
-    database = FakeDatabase()
-    with TestClient(create_app(settings, database)):  # type: ignore[arg-type]
+def test_el_lifespan_cierra_la_base_de_datos(make_app, database):
+    with TestClient(make_app()):
         assert database.closed is False
 
     assert database.closed is True

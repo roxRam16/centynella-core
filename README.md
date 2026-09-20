@@ -19,15 +19,15 @@ API RESTful construida con **FastAPI (Python 3.12)** y **MongoDB**, contenerizad
 
 ```
 centynella-core/
-├── app.py                 # Punto de entrada (Application Factory: create_app)
+├── app.py                 # Punto de entrada (Application Factory: `create_app`)
 ├── src/
 │   ├── config/            # Settings tipadas (pydantic-settings) leídas de private/.env.<ambiente>
-│   ├── database/          # DatabaseManager: conexión única a MongoDB
+│   ├── database/          # DatabaseManager + repositorios (interfaces y MongoDB)
 │   ├── dtos/              # Contratos de entrada/salida de la API (Pydantic)
 │   ├── middlewares/       # Request-ID y manejo de errores (RFC 9457)
-│   ├── models/            # Documentos de MongoDB (BaseDocument y patrones de modelado)
+│   ├── models/            # Documentos de MongoDB, permisos y roles de sistema
 │   ├── routes/            # Routers HTTP + dependencias (DI)
-│   └── services/          # Lógica de negocio
+│   └── services/          # Lógica de negocio: auth, usuarios, roles, tokens, correo
 ├── tests/                 # Batería de pruebas
 ├── private/               # Variables de entorno (.env.<ambiente>) — NO versionadas
 ├── .github/workflows/     # deploy.yml
@@ -36,7 +36,7 @@ centynella-core/
 └── venv/                  # Entorno virtual local (ignorado por git)
 ```
 
-**Flujo de una petición:** `route` (valida con DTO) → `service` (lógica) → `database/model` (persistencia). Las rutas nunca contienen lógica de negocio.
+**Flujo de una petición:** `route` (valida con DTO) → `service` (lógica) → `repository` (persistencia). Las rutas nunca contienen lógica de negocio y los servicios dependen de *interfaces* de repositorio, no de MongoDB.
 
 ## Puesta en marcha (local)
 
@@ -53,7 +53,7 @@ copy private\.env.example private\.env.sandbox     # y ajusta los valores
 #    Opcional, Mongo local: docker compose --profile local up -d mongo
 
 # 4. API con recarga automática
-python app.py                         # o: uvicorn app:app --reload --port 8000
+python app.py                         # o: uvicorn app:create_app --factory --reload --port 8000
 ```
 
 | URL | Descripción |
@@ -65,20 +65,73 @@ python app.py                         # o: uvicorn app:app --reload --port 8000
 | http://localhost:8000/health/ready | Readiness (verifica MongoDB) |
 | http://localhost:8000/api/v1/greeting | Hola Mundo |
 
+> ⚠ `app.py` es una *factory*: ya no existe el objeto `app`, así que `uvicorn app:app` **no funciona**. Usa `python app.py` o `uvicorn app:create_app --factory`.
+
 ## Endpoints
+
+Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 🛡 = requiere el permiso indicado.
+
+**Autenticación** (`/auth`)
 
 | Método | Ruta | Descripción | Respuestas |
 | --- | --- | --- | --- |
-| GET | `/health` | Liveness: el proceso está vivo | 200 |
-| GET | `/health/ready` | Readiness: dependencias listas | 200 · 503 (`degraded`) |
-| GET | `/api/v1/greeting` | Saludo *Hola Mundo* (prueba de humo) | 200 · 422 · 500 |
+| POST | `/auth/register` 🔓 | Registrar cuenta (rol por defecto `viewer`) | 201 · 403 · 409 · 422 |
+| POST | `/auth/login` 🔓 | Iniciar sesión (token + cookie de refresh) | 200 · 401 · 403 · 429 |
+| POST | `/auth/refresh` 🍪 | Renovar/restaurar la sesión con la cookie | 200 · 401 |
+| POST | `/auth/logout` 🍪 | Cerrar sesión (idempotente) | 204 |
+| POST | `/auth/password-reset-requests` 🔓 | Pedir enlace de recuperación (siempre 202) | 202 |
+| POST | `/auth/password-resets` 🔓 | Fijar contraseña nueva con el token del correo | 204 · 400 · 422 |
+| POST | `/auth/oauth/google` 🔓 | **Preparado**, aún no disponible | 501 |
+
+**Perfil y usuarios** (`/users`)
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/users/me` | 🔑 | Mi perfil + permisos efectivos |
+| PATCH | `/users/me` | 🔑 | Editar mi nombre |
+| PUT | `/users/me/password` | 🔑 | Cambiar mi contraseña (cierra otras sesiones) |
+| GET | `/users` | 🛡 `users:read` | Listado paginado (`q`, `role`, `status`, `page`, `page_size`) |
+| POST | `/users` | 🛡 `users:create` | Crear usuario con rol |
+| GET | `/users/{id}` | 🛡 `users:read` | Ver usuario |
+| PATCH | `/users/{id}` | 🛡 `users:update` | Editar nombre, rol o estado |
+| DELETE | `/users/{id}` | 🛡 `users:delete` | Eliminar usuario |
+
+**Roles y permisos**
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/permissions` | 🛡 `roles:read` | Catálogo de permisos |
+| GET | `/roles` · `/roles/{key}` | 🛡 `roles:read` | Listar / ver roles |
+| POST | `/roles` | 🛡 `roles:manage` | Crear rol personalizado |
+| PATCH | `/roles/{key}` | 🛡 `roles:manage` | Editar nombre, descripción o permisos |
+| DELETE | `/roles/{key}` | 🛡 `roles:manage` | Eliminar (no de sistema ni con usuarios) |
+
+**Infraestructura y prueba de humo:** `GET /health` (liveness) · `GET /health/ready` (readiness, 503 si Mongo cae) · `GET /api/v1/greeting`.
+
+## Autenticación y autorización
+
+**Sesión (persistente y segura).**
+- `login` devuelve un **access token JWT** (15 min) en el cuerpo — el frontend lo guarda **solo en memoria** — y deja el **refresh token** en la cookie `centynella_refresh`: `HttpOnly` (JavaScript no puede leerla → un XSS no roba la sesión), `SameSite=Lax` (protección CSRF) y `Secure` en producción. Dura 14 días.
+- **Restaurar sesión al abrir/recargar la app:** el frontend llama a `POST /auth/refresh`; la cookie viaja sola.
+- El refresh token **rota en cada uso**. En base de datos solo se guarda su **hash SHA-256**. Reutilizar un token ya rotado (posible robo) revoca toda la familia; existe una ventana de 10 s para dos pestañas que refrescan a la vez.
+- Cambiar/restablecer contraseña o deshabilitar/eliminar un usuario **cierra sus sesiones**.
+
+**Contraseñas.** Argon2id; política: 8+ caracteres con al menos una letra y un número. Tras 5 intentos fallidos la cuenta se bloquea 15 min (429 + `Retry-After`). El login responde igual si el correo no existe (no se pueden enumerar cuentas).
+
+**Recuperación.** `POST /auth/password-reset-requests` siempre responde 202. El enlace (`{FRONTEND_URL}/reset-password?token=…`) es de un solo uso y vence en 60 min. Hoy el correo se **simula en el log** del API (`LogEmailSender`); para producción se añade una implementación SMTP / Amazon SES detrás de la interfaz `EmailSender`.
+
+**Autorización por permisos.** Un *permiso* es `recurso:acción` (`users:read`…), un *rol* es un conjunto de permisos y el código **protege endpoints por permiso, nunca por rol**. Los permisos se leen del rol en cada petición: cambiar un rol surte efecto de inmediato. Roles de sistema (se crean al arrancar): `admin` (todos los permisos, siempre sincronizado), `manager` (`users:read`, `roles:read`) y `viewer` (sin permisos; rol por defecto del registro). Reglas de seguridad: nunca queda el sistema sin un administrador activo, no puedes cambiarte el rol/estado ni eliminarte, y los roles de sistema no se eliminan.
+
+**Administrador inicial.** Si la base no tiene usuarios y defines `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`, se crea al arrancar.
+
+**Google (preparado).** El contrato (`POST /auth/oauth/google`), el modelo (`users.providers[]`) y `GOOGLE_CLIENT_ID` están listos; falta verificar el `id_token` con `google-auth` en `AuthService.login_with_google`.
 
 ## Convenciones RESTful
 
 - **Versionado en la URL:** `/api/v1/...`. Un cambio incompatible crea `/api/v2`.
 - **Recursos = sustantivos** (`/products`, `/warehouses`); la acción la da el verbo HTTP: `GET` leer, `POST` crear (201 + `Location`), `PUT` reemplazar, `PATCH` modificar parcial, `DELETE` borrar (204).
-- **Códigos de estado correctos:** 200, 201, 204, 400, 401, 403, 404, 409, 422, 500, 503.
-- **Errores estándar** en `application/problem+json` ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) con `request_id` para rastrear.
+- **Códigos de estado correctos:** 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 429, 500, 501, 503.
+- **Errores estándar** en `application/problem+json` ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) con un `code` estable para máquinas (`email_taken`, `last_admin`…) y `request_id` para rastrear.
 - **Trazabilidad:** cada respuesta incluye `X-Request-ID` (se respeta el que envíe el cliente).
 - **Documentación obligatoria:** cada endpoint lleva `summary`, `description`, `response_model` y sus respuestas de error para que Swagger quede completo.
 - **Salud:** `/health` y `/health/ready` van fuera de `/api/v1` porque son infraestructura, no contrato de negocio.
@@ -93,7 +146,14 @@ Variables en `private/.env.<ambiente>` (elige el ambiente con `APP_ENV`, por def
 | `MONGODB_URI` | Cadena de conexión (MongoDB Atlas, `mongodb+srv://…`) | `mongodb://localhost:27017` |
 | `MONGODB_DB` | Base de datos del ambiente | `centynella` |
 | `MONGODB_TIMEOUT_MS` | Timeout de selección de servidor | `2000` |
-| `CORS_ORIGINS` | Orígenes permitidos (coma) — el shell del MFE | `http://localhost:5173` |
+| `JWT_SECRET_KEY` | **Obligatoria** (≥ 32 caracteres); firma los JWT. Distinta por ambiente | — |
+| `FRONTEND_URL` | URL pública del shell (enlace de recuperación) | `http://localhost:5173` |
+| `BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | Administrador inicial (solo con la base vacía) | — |
+| `ACCESS_TOKEN_TTL_MINUTES` · `REFRESH_TOKEN_TTL_DAYS` | Vida de las sesiones | `15` · `14` |
+| `MAX_FAILED_LOGINS` · `LOCKOUT_MINUTES` | Bloqueo por intentos fallidos | `5` · `15` |
+| `REGISTRATION_ENABLED` | Registro público de cuentas | `true` |
+| `GOOGLE_CLIENT_ID` | Para el login con Google (aún inactivo) | — |
+| `CORS_ORIGINS` | Orígenes EXACTOS permitidos (coma) — el shell del MFE. El `*` se ignora (cookies) y en producción falla | `http://localhost:5173` |
 | `DOCS_ENABLED` | Habilita Swagger/ReDoc | `true` |
 
 > `private/.env.*` está en `.gitignore` y `.dockerignore`: **nunca** se versiona ni entra a la imagen.
@@ -133,13 +193,15 @@ Se aplican **cuando el caso lo amerita** (documentado en [src/models/base.py](sr
 ## Pruebas
 
 ```bash
-pytest                       # unitarias (no requieren Mongo real)
-pytest --cov                 # con cobertura (mínimo 80 %)
-pytest -m integration        # ping a la MongoDB del ambiente activo (APP_ENV, por defecto sandbox)
+pytest                       # unitarias: 154 pruebas, sin Mongo real
+pytest --cov                 # con cobertura (mínimo 80 %; hoy ~99 %)
+
+# Integración (requiere MongoDB local: docker compose --profile local up -d mongo)
+pytest -m integration        # contrato de repositorios contra Mongo real + ping a Atlas del ambiente activo
 ruff check . && ruff format --check .
 ```
 
-Las unitarias inyectan un `FakeDatabase`; así corren en cualquier lugar y en el CI. **Ningún despliegue corre sin pasar la batería completa.**
+Las unitarias inyectan repositorios **en memoria** (`tests/fakes.py`) y un remitente de correo de prueba; así corren en cualquier lugar y en el CI. `tests/test_repository_contract.py` ejecuta **la misma batería contra la implementación en memoria y contra MongoDB real**, lo que garantiza que el doble se comporta como la base de verdad. **Ningún despliegue corre sin pasar la batería completa.**
 
 ## Docker
 
@@ -169,6 +231,17 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.3.0 — Autenticación, usuarios, roles y permisos
+- Registro, login, sesión persistente (access JWT + refresh token rotativo en cookie HttpOnly), logout.
+- Recuperación de contraseña por correo (simulado en log) y cambio de contraseña autenticado.
+- Perfil propio y administración de usuarios (listado paginado con búsqueda y filtros, CRUD).
+- Roles y permisos administrables; protección de endpoints por permiso; reglas contra dejar el sistema sin administrador.
+- Bloqueo por intentos fallidos, hash Argon2id, tokens guardados como hash, errores con `code` estable.
+- Patrón Repository (interfaces + MongoDB + doble en memoria con pruebas de contrato).
+- Administrador inicial por variables de entorno; login con Google preparado (501).
+- **Cambio importante:** `app.py` es ahora una *factory* → `uvicorn app:create_app --factory` (o `python app.py`); `JWT_SECRET_KEY` es obligatoria.
+- 194 pruebas (154 unitarias + 40 de integración/contrato), cobertura ~99 %.
 
 ### 0.2.0 — MongoDB Atlas
 - Conexión a MongoDB Atlas con una base por ambiente: `centynella_sandbox` y `centynella_production`.

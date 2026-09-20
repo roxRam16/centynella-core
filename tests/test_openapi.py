@@ -1,8 +1,5 @@
 from fastapi.testclient import TestClient
 
-from app import create_app
-from src.config import Settings
-
 
 def test_swagger_y_redoc_disponibles(client):
     assert client.get("/docs").status_code == 200
@@ -18,9 +15,9 @@ def test_openapi_documenta_los_endpoints(client):
     assert "503" in schema["paths"]["/health/ready"]["get"]["responses"]
 
 
-def test_docs_se_pueden_desactivar(database):
-    settings = Settings(docs_enabled=False)
-    with TestClient(create_app(settings, database)) as client:  # type: ignore[arg-type]
+def test_docs_se_pueden_desactivar(make_app, settings):
+    app = make_app(settings=settings.model_copy(update={"docs_enabled": False}))
+    with TestClient(app) as client:
         assert client.get("/docs").status_code == 404
         assert client.get("/openapi.json").status_code == 404
 

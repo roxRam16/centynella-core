@@ -13,10 +13,11 @@ class ProblemDetailsDTO(BaseModel):
         json_schema_extra={
             "example": {
                 "type": "about:blank",
-                "title": "Not Found",
-                "status": 404,
-                "detail": "Not Found",
-                "instance": "/api/v1/nada",
+                "title": "Unauthorized",
+                "status": 401,
+                "detail": "Correo o contraseña incorrectos.",
+                "code": "invalid_credentials",
+                "instance": "/api/v1/auth/login",
                 "request_id": "0b1c2d3e4f5a",
             }
         }
@@ -26,6 +27,9 @@ class ProblemDetailsDTO(BaseModel):
     title: str = Field(description="Resumen corto y legible (frase HTTP del status).")
     status: int = Field(description="Código de estado HTTP.")
     detail: str | None = Field(default=None, description="Explicación específica de este error.")
+    code: str | None = Field(
+        default=None, description="Código estable para máquinas (ej. `email_taken`, `last_admin`)."
+    )
     instance: str | None = Field(default=None, description="Ruta de la petición que falló.")
     request_id: str | None = Field(
         default=None, description="Id para rastrear la petición en logs."

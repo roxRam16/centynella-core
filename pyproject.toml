@@ -29,4 +29,4 @@ extend-exclude = ["venv"]
 select = ["E", "F", "I", "B", "UP", "S", "SIM", "BLE"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]  # assert es la herramienta de pytest
+"tests/*" = ["S101", "S105", "S106"]  # assert = pytest; las contraseñas de prueba son ficticias

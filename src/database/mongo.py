@@ -20,7 +20,10 @@ class DatabaseManager:
     def __init__(self, uri: str, db_name: str, timeout_ms: int = 2000) -> None:
         # El cliente es perezoso: no conecta hasta la primera operación.
         self._client: AsyncMongoClient = AsyncMongoClient(
-            uri, serverSelectionTimeoutMS=timeout_ms, appname="centynella-core"
+            uri,
+            serverSelectionTimeoutMS=timeout_ms,
+            appname="centynella-core",
+            tz_aware=True,  # las fechas leídas conservan su zona horaria (UTC)
         )
         self._db_name = db_name
 

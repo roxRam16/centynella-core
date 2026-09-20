@@ -11,8 +11,14 @@ Guía de patrones de modelado (aplicar según el caso, ver README):
 """
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+def new_id() -> str:
+    """Identificador de documento: UUID v4 en hexadecimal (str, sin ObjectId)."""
+    return uuid4().hex
 
 
 def utc_now() -> datetime:

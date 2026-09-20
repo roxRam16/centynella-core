@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.dtos import ProblemDetailsDTO
+from src.services.errors import DomainError
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,14 @@ def problem_response(
     status_code: int,
     detail: str | None = None,
     errors: list[dict] | None = None,
+    code: str | None = None,
 ) -> JSONResponse:
     """Construye la respuesta de error estándar."""
     problem = ProblemDetailsDTO(
         title=HTTPStatus(status_code).phrase,
         status=status_code,
         detail=detail,
+        code=code,
         instance=request.url.path,
         request_id=getattr(request.state, "request_id", None),
         errors=errors,
@@ -41,6 +44,14 @@ def problem_response(
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """404, 405, etc. y cualquier `HTTPException` lanzada por la app."""
     response = problem_response(request, exc.status_code, str(exc.detail))
+    if exc.headers:
+        response.headers.update(exc.headers)
+    return response
+
+
+async def domain_exception_handler(request: Request, exc: DomainError) -> JSONResponse:
+    """Errores de negocio (401, 403, 404, 409, 429…) con su `code` estable."""
+    response = problem_response(request, exc.status_code, exc.detail, code=exc.code)
     if exc.headers:
         response.headers.update(exc.headers)
     return response
@@ -71,5 +82,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 def register_exception_handlers(app: FastAPI) -> None:
     """Registra todos los handlers en la aplicación."""
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(DomainError, domain_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)

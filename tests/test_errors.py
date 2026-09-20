@@ -5,16 +5,14 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from app import create_app
-
 
 class _Payload(BaseModel):
     quantity: int
 
 
 @pytest.fixture
-def app_with_test_routes(settings, database):
-    app = create_app(settings, database)  # type: ignore[arg-type]
+def app_with_test_routes(make_app):
+    app = make_app()
 
     @app.post("/_test/validate")
     async def validate(payload: _Payload) -> dict:
