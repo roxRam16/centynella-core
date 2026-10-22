@@ -7,6 +7,7 @@ from src.models.permissions import (
     Permission,
     SystemRole,
 )
+from src.models.product import ProductDocument, ProductStatus
 from src.models.role import RoleDocument
 from src.models.token import PasswordResetDocument, RefreshTokenDocument
 from src.models.user import AuthProviderLink, UserDocument, UserStatus
@@ -23,6 +24,8 @@ __all__ = [
     "BaseDocument",
     "PasswordResetDocument",
     "Permission",
+    "ProductDocument",
+    "ProductStatus",
     "RefreshTokenDocument",
     "RoleDocument",
     "SystemRole",

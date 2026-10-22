@@ -11,6 +11,7 @@ from typing import Any, Protocol
 from src.models import (
     LogEntry,
     PasswordResetDocument,
+    ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
     UserDocument,
@@ -49,6 +50,29 @@ class RoleRepository(Protocol):
     async def update(self, key: str, changes: dict[str, Any]) -> RoleDocument | None: ...
 
     async def delete(self, key: str) -> bool: ...
+
+
+class ProductRepository(Protocol):
+    async def create(self, product: ProductDocument) -> ProductDocument:
+        """Inserta. Lanza `DuplicateError('sku')` si el SKU ya existe."""
+
+    async def get(self, product_id: str) -> ProductDocument | None: ...
+
+    async def update(self, product_id: str, changes: dict[str, Any]) -> ProductDocument | None:
+        """Aplica `changes` (y `updated_at`). `None` si no existe."""
+
+    async def delete(self, product_id: str) -> bool: ...
+
+    async def list(
+        self,
+        *,
+        query: str | None,
+        category: str | None,
+        status: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[ProductDocument], int]:
+        """Página de productos (más recientes primero) y total que cumple los filtros."""
 
 
 class RefreshTokenRepository(Protocol):

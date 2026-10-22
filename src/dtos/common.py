@@ -98,3 +98,14 @@ RoleKey = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]{1,31}$")]
 SafeText = Annotated[
     str, StringConstraints(strip_whitespace=True), AfterValidator(_check_safe_text)
 ]
+
+
+def _check_sku(value: str) -> str:
+    """Letras, números, `.`, `-`, `_`; sin espacios ni acentos. Se guarda en MAYÚSCULAS."""
+    if not re.match(r"^[A-Za-z0-9._-]{1,40}$", value):
+        raise ValueError("El SKU solo admite letras, números, punto, guion y guion bajo")
+    return value.upper()
+
+
+# Código de producto: normalizado a mayúsculas.
+Sku = Annotated[str, StringConstraints(strip_whitespace=True), AfterValidator(_check_sku)]

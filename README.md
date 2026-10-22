@@ -106,6 +106,16 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | PATCH | `/roles/{key}` | 🛡 `roles:manage` | Editar nombre, descripción o permisos |
 | DELETE | `/roles/{key}` | 🛡 `roles:manage` | Eliminar (no de sistema ni con usuarios) |
 
+**Catálogo de productos** (`/products`)
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/products` | 🛡 `products:read` | Listado paginado (`q`, `category`, `status`, `page`, `page_size`) |
+| POST | `/products` | 🛡 `products:create` | Dar de alta un producto (SKU único) |
+| GET | `/products/{id}` | 🛡 `products:read` | Ver un producto |
+| PATCH | `/products/{id}` | 🛡 `products:update` | Editar nombre, categoría, precio, existencia, umbral o estado |
+| DELETE | `/products/{id}` | 🛡 `products:delete` | Eliminar un producto |
+
 **Bitácora** (`/logs`, permiso `logs:read`): `GET /logs` (búsqueda con filtros y paginación) · `GET /logs/modules`.
 
 **Infraestructura y prueba de humo:** `GET /health` (liveness) · `GET /health/ready` (readiness, 503 si Mongo cae) · `GET /api/v1/greeting`.
@@ -261,6 +271,13 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.5.0 — Catálogo de productos (inventario)
+- Nuevo módulo `products`: alta, edición, baja y listado (búsqueda por nombre/SKU, filtros por categoría y estado, paginación). SKU único, normalizado a mayúsculas.
+- Patrón de modelado: SUBCONJUNTO (`quantity` embebida en el producto); se separa en una colección de existencia por ubicación el día que haya varios almacenes.
+- Permisos nuevos `products:read/create/update/delete`; `viewer` (rol por defecto) ya puede leer el catálogo (pensado para un cajero), `manager` puede crear/editar pero no eliminar.
+- 297 pruebas, cobertura ~92 %.
+- Nota de arquitectura: por ahora el catálogo vive en este mismo backend (monolito), sin aislamiento multiempresa — es para una primera prueba de uso real. El pivote a SaaS multiempresa (Organization/tenant_id) queda mapeado pero pospuesto a antes de la primera venta real.
 
 ### 0.4.0 — Bitácora y endurecimiento de entradas
 - Bitácora en una base de datos separada (`MONGODB_LOGS_DB`): eventos por módulo, usuario, sesión y petición; cola asíncrona que no bloquea, saneamiento de secretos, TTL, puente con `logging`; consulta en `GET /api/v1/logs` (`logs:read`).

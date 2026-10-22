@@ -60,6 +60,7 @@ TAGS_METADATA = [
     {"name": "Authentication", "description": "Registro, sesión, recuperación de contraseña."},
     {"name": "Users", "description": "Perfil propio y administración de usuarios."},
     {"name": "Roles", "description": "Roles y permisos."},
+    {"name": "Products", "description": "Catálogo de productos e inventario."},
     {"name": "Logs", "description": "Bitácora del sistema (solo lectura)."},
     {"name": "Health", "description": "Sondas de salud para balanceador, ECS y Docker."},
     {"name": "Greeting", "description": "Prueba de humo *Hola Mundo* de la API."},

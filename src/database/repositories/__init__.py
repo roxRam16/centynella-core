@@ -1,7 +1,7 @@
 """Repositorios de datos y su contenedor.
 
-`Repositories` agrupa los cuatro repositorios que usan los servicios. En producción se
-construye sobre MongoDB (`build_mongo_repositories`); en pruebas se inyecta uno en memoria.
+`Repositories` agrupa los repositorios que usan los servicios. En producción se construye
+sobre MongoDB (`build_mongo_repositories`); en pruebas se inyecta uno en memoria.
 """
 
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ from src.database.repositories.interfaces import (
     LogQuery,
     LogRepository,
     PasswordResetRepository,
+    ProductRepository,
     RefreshTokenRepository,
     RoleRepository,
     UserRepository,
@@ -19,6 +20,7 @@ from src.database.repositories.interfaces import (
 from src.database.repositories.mongo import (
     MongoLogRepository,
     MongoPasswordResetRepository,
+    MongoProductRepository,
     MongoRefreshTokenRepository,
     MongoRoleRepository,
     MongoUserRepository,
@@ -31,10 +33,18 @@ class Repositories:
     roles: RoleRepository
     refresh_tokens: RefreshTokenRepository
     password_resets: PasswordResetRepository
+    products: ProductRepository
 
     async def ensure_indexes(self) -> None:
         """Crea los índices de los repositorios que los necesitan (idempotente)."""
-        for repository in (self.users, self.roles, self.refresh_tokens, self.password_resets):
+        repos = (
+            self.users,
+            self.roles,
+            self.refresh_tokens,
+            self.password_resets,
+            self.products,
+        )
+        for repository in repos:
             ensure = getattr(repository, "ensure_indexes", None)
             if ensure is not None:
                 await ensure()
@@ -47,6 +57,7 @@ def build_mongo_repositories(db: AsyncDatabase) -> Repositories:
         roles=MongoRoleRepository(db),
         refresh_tokens=MongoRefreshTokenRepository(db),
         password_resets=MongoPasswordResetRepository(db),
+        products=MongoProductRepository(db),
     )
 
 
@@ -55,10 +66,12 @@ __all__ = [
     "LogRepository",
     "MongoLogRepository",
     "MongoPasswordResetRepository",
+    "MongoProductRepository",
     "MongoRefreshTokenRepository",
     "MongoRoleRepository",
     "MongoUserRepository",
     "PasswordResetRepository",
+    "ProductRepository",
     "RefreshTokenRepository",
     "Repositories",
     "RoleRepository",

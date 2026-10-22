@@ -12,6 +12,7 @@ from src.services.greeting_service import GreetingService
 from src.services.health_service import HealthService
 from src.services.log_service import LogService
 from src.services.password_hasher import PasswordHasher
+from src.services.product_service import ProductService
 from src.services.role_service import RoleService
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
@@ -24,6 +25,7 @@ class Services:
     auth: AuthService
     users: UserService
     roles: RoleService
+    products: ProductService
     logs: LogService
     events: EventLogger
     tokens: TokenService
@@ -44,6 +46,7 @@ def build_services(
         auth=AuthService(settings, repositories, hasher, tokens, email_sender, events),
         users=UserService(repositories, hasher, events),
         roles=RoleService(repositories, events),
+        products=ProductService(repositories, events),
         logs=LogService(log_repository),
         events=events,
         tokens=tokens,
@@ -62,6 +65,7 @@ __all__ = [
     "HealthService",
     "LogEmailSender",
     "PasswordHasher",
+    "ProductService",
     "RoleService",
     "Services",
     "TokenService",

@@ -11,6 +11,7 @@ from src.database import DuplicateError, LogQuery, Repositories
 from src.models import (
     LogEntry,
     PasswordResetDocument,
+    ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
     UserDocument,
@@ -70,6 +71,59 @@ class InMemoryUserRepository:
         if query:
             needle = query.strip().lower()
             return needle in user.name.lower() or needle in user.email.lower()
+        return True
+
+
+class InMemoryProductRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, ProductDocument] = {}
+
+    async def create(self, product: ProductDocument) -> ProductDocument:
+        if any(existing.sku == product.sku for existing in self.items.values()):
+            raise DuplicateError("sku")
+        product.id = product.id or new_id()
+        self.items[product.id] = product.model_copy(deep=True)
+        return product
+
+    async def get(self, product_id: str) -> ProductDocument | None:
+        product = self.items.get(product_id)
+        return product.model_copy(deep=True) if product else None
+
+    async def update(self, product_id: str, changes: dict[str, Any]) -> ProductDocument | None:
+        product = self.items.get(product_id)
+        if product is None:
+            return None
+        self.items[product_id] = product.model_copy(update={**changes, "updated_at": utc_now()})
+        return self.items[product_id].model_copy(deep=True)
+
+    async def delete(self, product_id: str) -> bool:
+        return self.items.pop(product_id, None) is not None
+
+    async def list(
+        self,
+        *,
+        query: str | None,
+        category: str | None,
+        status: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[ProductDocument], int]:
+        matches = [p for p in self.items.values() if self._matches(p, query, category, status)]
+        matches.sort(key=lambda p: (p.created_at, p.id), reverse=True)
+        start = (page - 1) * page_size
+        return [p.model_copy(deep=True) for p in matches[start : start + page_size]], len(matches)
+
+    @staticmethod
+    def _matches(
+        product: ProductDocument, query: str | None, category: str | None, status: str | None
+    ):
+        if category and product.category != category:
+            return False
+        if status and product.status != status:
+            return False
+        if query:
+            needle = query.strip().lower()
+            return needle in product.name.lower() or needle in product.sku.lower()
         return True
 
 
@@ -163,6 +217,7 @@ def build_in_memory_repositories() -> Repositories:
         roles=InMemoryRoleRepository(),
         refresh_tokens=InMemoryRefreshTokenRepository(),
         password_resets=InMemoryPasswordResetRepository(),
+        products=InMemoryProductRepository(),
     )
 
 

@@ -19,6 +19,7 @@ from src.database.repositories.interfaces import LogQuery
 from src.models import (
     LogEntry,
     PasswordResetDocument,
+    ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
     UserDocument,
@@ -98,6 +99,71 @@ class MongoUserRepository:
             # re.escape: el texto del usuario nunca se interpreta como expresión regular.
             pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
             criteria["$or"] = [{"name": pattern}, {"email": pattern}]
+        return criteria
+
+
+class MongoProductRepository:
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._collection: AsyncCollection = db["products"]
+
+    async def ensure_indexes(self) -> None:
+        await self._collection.create_index("sku", unique=True)
+        await self._collection.create_index("category")
+        await self._collection.create_index("status")
+
+    async def create(self, product: ProductDocument) -> ProductDocument:
+        product.id = product.id or new_id()
+        try:
+            await self._collection.insert_one(_dump(product))
+        except DuplicateKeyError as error:
+            raise DuplicateError("sku") from error
+        return product
+
+    async def get(self, product_id: str) -> ProductDocument | None:
+        document = await self._collection.find_one({"_id": product_id})
+        return ProductDocument.model_validate(document) if document else None
+
+    async def update(self, product_id: str, changes: dict[str, Any]) -> ProductDocument | None:
+        document = await self._collection.find_one_and_update(
+            {"_id": product_id},
+            {"$set": {**changes, "updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return ProductDocument.model_validate(document) if document else None
+
+    async def delete(self, product_id: str) -> bool:
+        result = await self._collection.delete_one({"_id": product_id})
+        return result.deleted_count == 1
+
+    async def list(
+        self,
+        *,
+        query: str | None,
+        category: str | None,
+        status: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[ProductDocument], int]:
+        criteria = self._criteria(query=query, category=category, status=status)
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("created_at", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [ProductDocument.model_validate(doc) async for doc in cursor], total
+
+    @staticmethod
+    def _criteria(*, query: str | None, category: str | None, status: str | None) -> dict[str, Any]:
+        criteria: dict[str, Any] = {}
+        if category:
+            criteria["category"] = category
+        if status:
+            criteria["status"] = status
+        if query:
+            pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
+            criteria["$or"] = [{"name": pattern}, {"sku": pattern}]
         return criteria
 
 

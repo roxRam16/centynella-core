@@ -19,6 +19,10 @@ class Permission(StrEnum):
     ROLES_READ = "roles:read"
     ROLES_MANAGE = "roles:manage"
     LOGS_READ = "logs:read"
+    PRODUCTS_READ = "products:read"
+    PRODUCTS_CREATE = "products:create"
+    PRODUCTS_UPDATE = "products:update"
+    PRODUCTS_DELETE = "products:delete"
 
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -29,6 +33,10 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.ROLES_READ: "Ver roles y permisos",
     Permission.ROLES_MANAGE: "Crear, editar y eliminar roles",
     Permission.LOGS_READ: "Consultar la bitácora del sistema",
+    Permission.PRODUCTS_READ: "Ver el catálogo de productos y su existencia",
+    Permission.PRODUCTS_CREATE: "Dar de alta productos",
+    Permission.PRODUCTS_UPDATE: "Editar productos y ajustar su existencia",
+    Permission.PRODUCTS_DELETE: "Eliminar productos",
 }
 
 ADMIN_ROLE = "admin"
@@ -53,13 +61,20 @@ SYSTEM_ROLES: tuple[SystemRole, ...] = (
     SystemRole(
         key="manager",
         name="Gerente",
-        description="Consulta usuarios y roles.",
-        permissions=(Permission.USERS_READ.value, Permission.ROLES_READ.value),
+        description="Consulta usuarios y roles; administra el catálogo de productos.",
+        permissions=(
+            Permission.USERS_READ.value,
+            Permission.ROLES_READ.value,
+            Permission.PRODUCTS_READ.value,
+            Permission.PRODUCTS_CREATE.value,
+            Permission.PRODUCTS_UPDATE.value,
+        ),
     ),
     SystemRole(
         key="viewer",
         name="Consulta",
-        description="Usuario estándar sin permisos de administración (rol por defecto).",
-        permissions=(),
+        description="Usuario estándar sin permisos de administración (rol por defecto). "
+        "Puede ver el catálogo (pensado para un cajero en el punto de venta).",
+        permissions=(Permission.PRODUCTS_READ.value,),
     ),
 )

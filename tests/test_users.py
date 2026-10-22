@@ -46,14 +46,15 @@ def test_mi_perfil_incluye_permisos(client, admin_headers):
     assert "users:delete" in body["permissions"]
 
 
-def test_usuario_sin_privilegios_no_tiene_permisos(client, register_user):
+def test_usuario_sin_privilegios_no_administra_nada(client, register_user):
     register_user()
     token = login(client, "ana@example.com", USER_PASSWORD)["access_token"]
 
     body = client.get(f"{USERS_URL}/me", headers=auth_headers(token)).json()
 
     assert body["role"] == "viewer"
-    assert body["permissions"] == []
+    # Sin permisos de administración; sí puede ver el catálogo (pensado para un cajero).
+    assert body["permissions"] == ["products:read"]
 
 
 def test_editar_mi_perfil_solo_cambia_el_nombre(client, register_user):
