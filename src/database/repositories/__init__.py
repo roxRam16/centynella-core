@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pymongo.asynchronous.database import AsyncDatabase
 
 from src.database.repositories.interfaces import (
+    CreditMovementRepository,
+    CustomerRepository,
     LogQuery,
     LogRepository,
     PasswordResetRepository,
@@ -18,6 +20,8 @@ from src.database.repositories.interfaces import (
     UserRepository,
 )
 from src.database.repositories.mongo import (
+    MongoCreditMovementRepository,
+    MongoCustomerRepository,
     MongoLogRepository,
     MongoPasswordResetRepository,
     MongoProductRepository,
@@ -34,6 +38,8 @@ class Repositories:
     refresh_tokens: RefreshTokenRepository
     password_resets: PasswordResetRepository
     products: ProductRepository
+    customers: CustomerRepository
+    credit_movements: CreditMovementRepository
 
     async def ensure_indexes(self) -> None:
         """Crea los índices de los repositorios que los necesitan (idempotente)."""
@@ -43,6 +49,8 @@ class Repositories:
             self.refresh_tokens,
             self.password_resets,
             self.products,
+            self.customers,
+            self.credit_movements,
         )
         for repository in repos:
             ensure = getattr(repository, "ensure_indexes", None)
@@ -58,12 +66,18 @@ def build_mongo_repositories(db: AsyncDatabase) -> Repositories:
         refresh_tokens=MongoRefreshTokenRepository(db),
         password_resets=MongoPasswordResetRepository(db),
         products=MongoProductRepository(db),
+        customers=MongoCustomerRepository(db),
+        credit_movements=MongoCreditMovementRepository(db),
     )
 
 
 __all__ = [
+    "CreditMovementRepository",
+    "CustomerRepository",
     "LogQuery",
     "LogRepository",
+    "MongoCreditMovementRepository",
+    "MongoCustomerRepository",
     "MongoLogRepository",
     "MongoPasswordResetRepository",
     "MongoProductRepository",

@@ -53,8 +53,12 @@ def test_usuario_sin_privilegios_no_administra_nada(client, register_user):
     body = client.get(f"{USERS_URL}/me", headers=auth_headers(token)).json()
 
     assert body["role"] == "viewer"
-    # Sin permisos de administración; sí puede ver el catálogo (pensado para un cajero).
-    assert body["permissions"] == ["products:read"]
+    # Sin permisos de administración; sí puede operar la caja (catálogo, clientes y fiado).
+    assert sorted(body["permissions"]) == [
+        "customers:credit",
+        "customers:read",
+        "products:read",
+    ]
 
 
 def test_editar_mi_perfil_solo_cambia_el_nombre(client, register_user):

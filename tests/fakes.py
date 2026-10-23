@@ -9,6 +9,8 @@ from typing import Any
 
 from src.database import DuplicateError, LogQuery, Repositories
 from src.models import (
+    CreditMovementDocument,
+    CustomerDocument,
     LogEntry,
     PasswordResetDocument,
     ProductDocument,
@@ -127,6 +129,72 @@ class InMemoryProductRepository:
         return True
 
 
+class InMemoryCustomerRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, CustomerDocument] = {}
+
+    async def create(self, customer: CustomerDocument) -> CustomerDocument:
+        customer.id = customer.id or new_id()
+        self.items[customer.id] = customer.model_copy(deep=True)
+        return customer
+
+    async def get(self, customer_id: str) -> CustomerDocument | None:
+        customer = self.items.get(customer_id)
+        return customer.model_copy(deep=True) if customer else None
+
+    async def update(self, customer_id: str, changes: dict[str, Any]) -> CustomerDocument | None:
+        customer = self.items.get(customer_id)
+        if customer is None:
+            return None
+        self.items[customer_id] = customer.model_copy(update={**changes, "updated_at": utc_now()})
+        return self.items[customer_id].model_copy(deep=True)
+
+    async def adjust_balance(self, customer_id: str, delta: float) -> CustomerDocument | None:
+        customer = self.items.get(customer_id)
+        if customer is None:
+            return None
+        self.items[customer_id] = customer.model_copy(
+            update={"balance": customer.balance + delta, "updated_at": utc_now()}
+        )
+        return self.items[customer_id].model_copy(deep=True)
+
+    async def delete(self, customer_id: str) -> bool:
+        return self.items.pop(customer_id, None) is not None
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[CustomerDocument], int]:
+        matches = [c for c in self.items.values() if self._matches(c, query)]
+        matches.sort(key=lambda c: (c.created_at, c.id), reverse=True)
+        start = (page - 1) * page_size
+        return [c.model_copy(deep=True) for c in matches[start : start + page_size]], len(matches)
+
+    @staticmethod
+    def _matches(customer: CustomerDocument, query: str | None) -> bool:
+        if not query:
+            return True
+        needle = query.strip().lower()
+        return needle in customer.name.lower() or needle in (customer.phone or "").lower()
+
+
+class InMemoryCreditMovementRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, CreditMovementDocument] = {}
+
+    async def create(self, movement: CreditMovementDocument) -> CreditMovementDocument:
+        movement.id = movement.id or new_id()
+        self.items[movement.id] = movement.model_copy(deep=True)
+        return movement
+
+    async def list_for_customer(
+        self, customer_id: str, *, page: int, page_size: int
+    ) -> tuple[list[CreditMovementDocument], int]:
+        matches = [m for m in self.items.values() if m.customer_id == customer_id]
+        matches.sort(key=lambda m: (m.created_at, m.id), reverse=True)
+        start = (page - 1) * page_size
+        return [m.model_copy(deep=True) for m in matches[start : start + page_size]], len(matches)
+
+
 class InMemoryRoleRepository:
     def __init__(self) -> None:
         self.items: dict[str, RoleDocument] = {}
@@ -218,6 +286,8 @@ def build_in_memory_repositories() -> Repositories:
         refresh_tokens=InMemoryRefreshTokenRepository(),
         password_resets=InMemoryPasswordResetRepository(),
         products=InMemoryProductRepository(),
+        customers=InMemoryCustomerRepository(),
+        credit_movements=InMemoryCreditMovementRepository(),
     )
 
 

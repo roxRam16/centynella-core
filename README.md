@@ -116,6 +116,18 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | PATCH | `/products/{id}` | 🛡 `products:update` | Editar nombre, categoría, precio, existencia, umbral o estado |
 | DELETE | `/products/{id}` | 🛡 `products:delete` | Eliminar un producto |
 
+**Clientes y fiado** (`/customers`)
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/customers` | 🛡 `customers:read` | Listado paginado (`q`, `page`, `page_size`) |
+| POST | `/customers` | 🛡 `customers:create` | Dar de alta un cliente |
+| GET | `/customers/{id}` | 🛡 `customers:read` | Ver un cliente |
+| PATCH | `/customers/{id}` | 🛡 `customers:update` | Editar contacto o límite de crédito (no el saldo) |
+| DELETE | `/customers/{id}` | 🛡 `customers:delete` | Eliminar (solo sin saldo pendiente) |
+| GET | `/customers/{id}/credit-movements` | 🛡 `customers:read` | Historial de fiado (cargos y abonos) |
+| POST | `/customers/{id}/credit-movements` | 🛡 `customers:credit` | Anotar un cargo o un abono |
+
 **Bitácora** (`/logs`, permiso `logs:read`): `GET /logs` (búsqueda con filtros y paginación) · `GET /logs/modules`.
 
 **Infraestructura y prueba de humo:** `GET /health` (liveness) · `GET /health/ready` (readiness, 503 si Mongo cae) · `GET /api/v1/greeting`.
@@ -271,6 +283,13 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.6.0 — Clientes y fiado (crédito informal)
+- Nuevo módulo `customers`: alta, edición, baja y listado (búsqueda por nombre/teléfono, paginación). `balance` es una caché que se recalcula con cada movimiento de `credit_movements` (colección aparte, solo inserción — es el historial auditable).
+- `POST /customers/{id}/credit-movements`: `charge` (se anota una venta a crédito) o `payment` (abona). El abono nunca deja el saldo en negativo (409 si es mayor); el cargo SÍ puede superar el límite de crédito — se permite y se avisa en la bitácora, no se bloquea (misma política que el stock negativo de productos).
+- No se puede eliminar un cliente con saldo pendiente.
+- Permisos nuevos `customers:read/create/update/delete/credit`; `credit` queda separado de `update` a propósito: un cajero (`viewer`) puede cobrar/anotar fiado sin poder editar ni borrar clientes.
+- 317 pruebas, cobertura ~91 %.
 
 ### 0.5.0 — Catálogo de productos (inventario)
 - Nuevo módulo `products`: alta, edición, baja y listado (búsqueda por nombre/SKU, filtros por categoría y estado, paginación). SKU único, normalizado a mayúsculas.

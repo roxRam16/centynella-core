@@ -107,5 +107,10 @@ def _check_sku(value: str) -> str:
     return value.upper()
 
 
+# Teléfono de contacto: dígitos, espacios y + - ( ) nada más (acepta formatos locales e
+# internacionales sin forzar un patrón único de país).
+Phone = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9+\-() ]{7,20}$")]
+
+
 # Código de producto: normalizado a mayúsculas.
 Sku = Annotated[str, StringConstraints(strip_whitespace=True), AfterValidator(_check_sku)]

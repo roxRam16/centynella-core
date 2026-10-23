@@ -11,7 +11,7 @@ Estándar RESTful:
 from fastapi import APIRouter, status
 
 from src.dtos import ProblemDetailsDTO
-from src.routes import auth, greeting, health, logs, products, roles, users
+from src.routes import auth, customers, greeting, health, logs, products, roles, users
 
 # Respuestas de error comunes documentadas en Swagger para todos los endpoints de negocio.
 _COMMON_ERRORS = {
@@ -30,6 +30,7 @@ api_v1_router.include_router(auth.router)
 api_v1_router.include_router(users.router)
 api_v1_router.include_router(roles.router)
 api_v1_router.include_router(products.router)
+api_v1_router.include_router(customers.router)
 api_v1_router.include_router(logs.router)
 api_v1_router.include_router(greeting.router)
 

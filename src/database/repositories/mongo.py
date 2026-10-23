@@ -17,6 +17,8 @@ from pymongo.errors import DuplicateKeyError
 from src.database.errors import DuplicateError
 from src.database.repositories.interfaces import LogQuery
 from src.models import (
+    CreditMovementDocument,
+    CustomerDocument,
     LogEntry,
     PasswordResetDocument,
     ProductDocument,
@@ -165,6 +167,86 @@ class MongoProductRepository:
             pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
             criteria["$or"] = [{"name": pattern}, {"sku": pattern}]
         return criteria
+
+
+class MongoCustomerRepository:
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._collection: AsyncCollection = db["customers"]
+
+    async def ensure_indexes(self) -> None:
+        await self._collection.create_index("name")
+        await self._collection.create_index("phone")
+
+    async def create(self, customer: CustomerDocument) -> CustomerDocument:
+        customer.id = customer.id or new_id()
+        await self._collection.insert_one(_dump(customer))
+        return customer
+
+    async def get(self, customer_id: str) -> CustomerDocument | None:
+        document = await self._collection.find_one({"_id": customer_id})
+        return CustomerDocument.model_validate(document) if document else None
+
+    async def update(self, customer_id: str, changes: dict[str, Any]) -> CustomerDocument | None:
+        document = await self._collection.find_one_and_update(
+            {"_id": customer_id},
+            {"$set": {**changes, "updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return CustomerDocument.model_validate(document) if document else None
+
+    async def adjust_balance(self, customer_id: str, delta: float) -> CustomerDocument | None:
+        document = await self._collection.find_one_and_update(
+            {"_id": customer_id},
+            {"$inc": {"balance": delta}, "$set": {"updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return CustomerDocument.model_validate(document) if document else None
+
+    async def delete(self, customer_id: str) -> bool:
+        result = await self._collection.delete_one({"_id": customer_id})
+        return result.deleted_count == 1
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[CustomerDocument], int]:
+        criteria: dict[str, Any] = {}
+        if query:
+            pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
+            criteria["$or"] = [{"name": pattern}, {"phone": pattern}]
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("created_at", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [CustomerDocument.model_validate(doc) async for doc in cursor], total
+
+
+class MongoCreditMovementRepository:
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._collection: AsyncCollection = db["credit_movements"]
+
+    async def ensure_indexes(self) -> None:
+        await self._collection.create_index([("customer_id", 1), ("created_at", DESCENDING)])
+
+    async def create(self, movement: CreditMovementDocument) -> CreditMovementDocument:
+        movement.id = movement.id or new_id()
+        await self._collection.insert_one(_dump(movement))
+        return movement
+
+    async def list_for_customer(
+        self, customer_id: str, *, page: int, page_size: int
+    ) -> tuple[list[CreditMovementDocument], int]:
+        criteria = {"customer_id": customer_id}
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("created_at", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [CreditMovementDocument.model_validate(doc) async for doc in cursor], total
 
 
 class MongoRoleRepository:

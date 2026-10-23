@@ -23,6 +23,11 @@ class Permission(StrEnum):
     PRODUCTS_CREATE = "products:create"
     PRODUCTS_UPDATE = "products:update"
     PRODUCTS_DELETE = "products:delete"
+    CUSTOMERS_READ = "customers:read"
+    CUSTOMERS_CREATE = "customers:create"
+    CUSTOMERS_UPDATE = "customers:update"
+    CUSTOMERS_DELETE = "customers:delete"
+    CUSTOMERS_CREDIT = "customers:credit"
 
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -37,6 +42,11 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.PRODUCTS_CREATE: "Dar de alta productos",
     Permission.PRODUCTS_UPDATE: "Editar productos y ajustar su existencia",
     Permission.PRODUCTS_DELETE: "Eliminar productos",
+    Permission.CUSTOMERS_READ: "Ver clientes y su saldo de fiado",
+    Permission.CUSTOMERS_CREATE: "Dar de alta clientes",
+    Permission.CUSTOMERS_UPDATE: "Editar datos de contacto y límite de crédito",
+    Permission.CUSTOMERS_DELETE: "Eliminar clientes (solo sin saldo pendiente)",
+    Permission.CUSTOMERS_CREDIT: "Anotar cargos (fiado) y abonos",
 }
 
 ADMIN_ROLE = "admin"
@@ -61,20 +71,28 @@ SYSTEM_ROLES: tuple[SystemRole, ...] = (
     SystemRole(
         key="manager",
         name="Gerente",
-        description="Consulta usuarios y roles; administra el catálogo de productos.",
+        description="Consulta usuarios y roles; administra el catálogo y los clientes.",
         permissions=(
             Permission.USERS_READ.value,
             Permission.ROLES_READ.value,
             Permission.PRODUCTS_READ.value,
             Permission.PRODUCTS_CREATE.value,
             Permission.PRODUCTS_UPDATE.value,
+            Permission.CUSTOMERS_READ.value,
+            Permission.CUSTOMERS_CREATE.value,
+            Permission.CUSTOMERS_UPDATE.value,
+            Permission.CUSTOMERS_CREDIT.value,
         ),
     ),
     SystemRole(
         key="viewer",
         name="Consulta",
         description="Usuario estándar sin permisos de administración (rol por defecto). "
-        "Puede ver el catálogo (pensado para un cajero en el punto de venta).",
-        permissions=(Permission.PRODUCTS_READ.value,),
+        "Puede ver el catálogo y cobrar/anotar fiado (pensado para un cajero).",
+        permissions=(
+            Permission.PRODUCTS_READ.value,
+            Permission.CUSTOMERS_READ.value,
+            Permission.CUSTOMERS_CREDIT.value,
+        ),
     ),
 )

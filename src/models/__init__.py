@@ -1,4 +1,5 @@
 from src.models.base import BaseDocument, new_id, utc_now
+from src.models.customer import CreditMovementDocument, CreditMovementType, CustomerDocument
 from src.models.log import LEVEL_ORDER, LogEntry, LogLevel, levels_at_or_above
 from src.models.permissions import (
     ADMIN_ROLE,
@@ -22,6 +23,9 @@ __all__ = [
     "SYSTEM_ROLES",
     "AuthProviderLink",
     "BaseDocument",
+    "CreditMovementDocument",
+    "CreditMovementType",
+    "CustomerDocument",
     "PasswordResetDocument",
     "Permission",
     "ProductDocument",

@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from src.models import (
+    CreditMovementDocument,
+    CustomerDocument,
     LogEntry,
     PasswordResetDocument,
     ProductDocument,
@@ -73,6 +75,37 @@ class ProductRepository(Protocol):
         page_size: int,
     ) -> tuple[list[ProductDocument], int]:
         """Página de productos (más recientes primero) y total que cumple los filtros."""
+
+
+class CustomerRepository(Protocol):
+    async def create(self, customer: CustomerDocument) -> CustomerDocument:
+        """Inserta un cliente nuevo (balance en 0)."""
+
+    async def get(self, customer_id: str) -> CustomerDocument | None: ...
+
+    async def update(self, customer_id: str, changes: dict[str, Any]) -> CustomerDocument | None:
+        """Aplica `changes` (y `updated_at`). Nunca usar esto para tocar `balance`."""
+
+    async def adjust_balance(self, customer_id: str, delta: float) -> CustomerDocument | None:
+        """Suma `delta` al balance de forma ATÓMICA (positivo = cargo, negativo = abono)."""
+
+    async def delete(self, customer_id: str) -> bool: ...
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[CustomerDocument], int]:
+        """Página de clientes (más recientes primero) y total que cumple los filtros."""
+
+
+class CreditMovementRepository(Protocol):
+    """Historial de fiado: solo se inserta, nunca se edita ni se borra (es auditable)."""
+
+    async def create(self, movement: CreditMovementDocument) -> CreditMovementDocument: ...
+
+    async def list_for_customer(
+        self, customer_id: str, *, page: int, page_size: int
+    ) -> tuple[list[CreditMovementDocument], int]:
+        """Página de movimientos del cliente (más recientes primero) y su total."""
 
 
 class RefreshTokenRepository(Protocol):

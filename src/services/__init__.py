@@ -6,6 +6,7 @@ from src.config import Settings
 from src.database import LogRepository, Repositories
 from src.services.auth_service import AuthService, AuthSession
 from src.services.bootstrap import bootstrap_admin, seed_roles
+from src.services.customer_service import CustomerService
 from src.services.email_sender import EmailSender, LogEmailSender
 from src.services.event_logger import BridgeLogHandler, EventLogger, mask_email
 from src.services.greeting_service import GreetingService
@@ -26,6 +27,7 @@ class Services:
     users: UserService
     roles: RoleService
     products: ProductService
+    customers: CustomerService
     logs: LogService
     events: EventLogger
     tokens: TokenService
@@ -47,6 +49,7 @@ def build_services(
         users=UserService(repositories, hasher, events),
         roles=RoleService(repositories, events),
         products=ProductService(repositories, events),
+        customers=CustomerService(repositories, events),
         logs=LogService(log_repository),
         events=events,
         tokens=tokens,
@@ -57,6 +60,7 @@ def build_services(
 __all__ = [
     "AuthService",
     "BridgeLogHandler",
+    "CustomerService",
     "EventLogger",
     "LogService",
     "AuthSession",

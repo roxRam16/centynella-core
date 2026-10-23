@@ -7,6 +7,15 @@ from src.dtos.auth import (
     RegisterRequest,
     TokenResponse,
 )
+from src.dtos.customer import (
+    CreditMovementCreateRequest,
+    CreditMovementDTO,
+    CreditMovementPageDTO,
+    CustomerCreateRequest,
+    CustomerDTO,
+    CustomerPageDTO,
+    CustomerUpdateRequest,
+)
 from src.dtos.greeting import GreetingDTO
 from src.dtos.health import HealthDTO, ReadinessDTO
 from src.dtos.log import LogEntryDTO, LogPageDTO
@@ -28,6 +37,13 @@ from src.dtos.user import (
 )
 
 __all__ = [
+    "CreditMovementCreateRequest",
+    "CreditMovementDTO",
+    "CreditMovementPageDTO",
+    "CustomerCreateRequest",
+    "CustomerDTO",
+    "CustomerPageDTO",
+    "CustomerUpdateRequest",
     "GoogleLoginRequest",
     "GreetingDTO",
     "HealthDTO",
