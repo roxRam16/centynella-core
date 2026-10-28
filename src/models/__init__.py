@@ -10,6 +10,7 @@ from src.models.permissions import (
 )
 from src.models.product import ProductDocument, ProductStatus
 from src.models.role import RoleDocument
+from src.models.supplier import SupplierDocument
 from src.models.token import PasswordResetDocument, RefreshTokenDocument
 from src.models.user import AuthProviderLink, UserDocument, UserStatus
 
@@ -32,6 +33,7 @@ __all__ = [
     "ProductStatus",
     "RefreshTokenDocument",
     "RoleDocument",
+    "SupplierDocument",
     "SystemRole",
     "UserDocument",
     "UserStatus",

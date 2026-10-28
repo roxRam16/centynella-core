@@ -58,6 +58,7 @@ def test_usuario_sin_privilegios_no_administra_nada(client, register_user):
         "customers:credit",
         "customers:read",
         "products:read",
+        "suppliers:read",
     ]
 
 

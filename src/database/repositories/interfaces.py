@@ -16,6 +16,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SupplierDocument,
     UserDocument,
 )
 
@@ -95,6 +96,22 @@ class CustomerRepository(Protocol):
         self, *, query: str | None, page: int, page_size: int
     ) -> tuple[list[CustomerDocument], int]:
         """Página de clientes (más recientes primero) y total que cumple los filtros."""
+
+
+class SupplierRepository(Protocol):
+    async def create(self, supplier: SupplierDocument) -> SupplierDocument: ...
+
+    async def get(self, supplier_id: str) -> SupplierDocument | None: ...
+
+    async def update(self, supplier_id: str, changes: dict[str, Any]) -> SupplierDocument | None:
+        """Aplica `changes` (y `updated_at`)."""
+
+    async def delete(self, supplier_id: str) -> bool: ...
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[SupplierDocument], int]:
+        """Página de proveedores (más recientes primero) y total que cumple los filtros."""
 
 
 class CreditMovementRepository(Protocol):

@@ -24,6 +24,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SupplierDocument,
     UserDocument,
     new_id,
     utc_now,
@@ -221,6 +222,56 @@ class MongoCustomerRepository:
             .limit(page_size)
         )
         return [CustomerDocument.model_validate(doc) async for doc in cursor], total
+
+
+class MongoSupplierRepository:
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._collection: AsyncCollection = db["suppliers"]
+
+    async def ensure_indexes(self) -> None:
+        await self._collection.create_index("name")
+        await self._collection.create_index("phone")
+
+    async def create(self, supplier: SupplierDocument) -> SupplierDocument:
+        supplier.id = supplier.id or new_id()
+        await self._collection.insert_one(_dump(supplier))
+        return supplier
+
+    async def get(self, supplier_id: str) -> SupplierDocument | None:
+        document = await self._collection.find_one({"_id": supplier_id})
+        return SupplierDocument.model_validate(document) if document else None
+
+    async def update(self, supplier_id: str, changes: dict[str, Any]) -> SupplierDocument | None:
+        document = await self._collection.find_one_and_update(
+            {"_id": supplier_id},
+            {"$set": {**changes, "updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return SupplierDocument.model_validate(document) if document else None
+
+    async def delete(self, supplier_id: str) -> bool:
+        result = await self._collection.delete_one({"_id": supplier_id})
+        return result.deleted_count == 1
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[SupplierDocument], int]:
+        criteria: dict[str, Any] = {}
+        if query:
+            pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
+            criteria["$or"] = [
+                {"name": pattern},
+                {"phone": pattern},
+                {"products_supplied": pattern},
+            ]
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("created_at", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [SupplierDocument.model_validate(doc) async for doc in cursor], total
 
 
 class MongoCreditMovementRepository:

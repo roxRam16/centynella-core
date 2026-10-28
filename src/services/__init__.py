@@ -15,6 +15,7 @@ from src.services.log_service import LogService
 from src.services.password_hasher import PasswordHasher
 from src.services.product_service import ProductService
 from src.services.role_service import RoleService
+from src.services.supplier_service import SupplierService
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
 
@@ -28,6 +29,7 @@ class Services:
     roles: RoleService
     products: ProductService
     customers: CustomerService
+    suppliers: SupplierService
     logs: LogService
     events: EventLogger
     tokens: TokenService
@@ -50,6 +52,7 @@ def build_services(
         roles=RoleService(repositories, events),
         products=ProductService(repositories, events),
         customers=CustomerService(repositories, events),
+        suppliers=SupplierService(repositories, events),
         logs=LogService(log_repository),
         events=events,
         tokens=tokens,
@@ -72,6 +75,7 @@ __all__ = [
     "ProductService",
     "RoleService",
     "Services",
+    "SupplierService",
     "TokenService",
     "UserService",
     "bootstrap_admin",

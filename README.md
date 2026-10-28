@@ -128,6 +128,16 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | GET | `/customers/{id}/credit-movements` | 🛡 `customers:read` | Historial de fiado (cargos y abonos) |
 | POST | `/customers/{id}/credit-movements` | 🛡 `customers:credit` | Anotar un cargo o un abono |
 
+**Proveedores** (`/suppliers`): directorio simple.
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/suppliers` | 🛡 `suppliers:read` | Listado paginado (`q`, `page`, `page_size`) |
+| POST | `/suppliers` | 🛡 `suppliers:create` | Dar de alta un proveedor |
+| GET | `/suppliers/{id}` | 🛡 `suppliers:read` | Ver un proveedor |
+| PATCH | `/suppliers/{id}` | 🛡 `suppliers:update` | Editar un proveedor |
+| DELETE | `/suppliers/{id}` | 🛡 `suppliers:delete` | Eliminar un proveedor |
+
 **Bitácora** (`/logs`, permiso `logs:read`): `GET /logs` (búsqueda con filtros y paginación) · `GET /logs/modules`.
 
 **Infraestructura y prueba de humo:** `GET /health` (liveness) · `GET /health/ready` (readiness, 503 si Mongo cae) · `GET /api/v1/greeting`.
@@ -283,6 +293,10 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.7.0 — Proveedores (directorio simple)
+- Nuevo módulo `suppliers`: alta, edición, baja y listado (búsqueda por nombre, teléfono o lo que surte, paginación). Sin saldo ni movimientos — a diferencia de `customers`, es un directorio simple; órdenes de compra quedan fuera de alcance por ahora.
+- Permisos nuevos `suppliers:read/create/update/delete`; `manager` administra proveedores (sin eliminar), `viewer` solo lee.
 
 ### 0.6.0 — Clientes y fiado (crédito informal)
 - Nuevo módulo `customers`: alta, edición, baja y listado (búsqueda por nombre/teléfono, paginación). `balance` es una caché que se recalcula con cada movimiento de `credit_movements` (colección aparte, solo inserción — es el historial auditable).

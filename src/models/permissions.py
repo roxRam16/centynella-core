@@ -28,6 +28,10 @@ class Permission(StrEnum):
     CUSTOMERS_UPDATE = "customers:update"
     CUSTOMERS_DELETE = "customers:delete"
     CUSTOMERS_CREDIT = "customers:credit"
+    SUPPLIERS_READ = "suppliers:read"
+    SUPPLIERS_CREATE = "suppliers:create"
+    SUPPLIERS_UPDATE = "suppliers:update"
+    SUPPLIERS_DELETE = "suppliers:delete"
 
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -47,6 +51,10 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.CUSTOMERS_UPDATE: "Editar datos de contacto y límite de crédito",
     Permission.CUSTOMERS_DELETE: "Eliminar clientes (solo sin saldo pendiente)",
     Permission.CUSTOMERS_CREDIT: "Anotar cargos (fiado) y abonos",
+    Permission.SUPPLIERS_READ: "Ver el directorio de proveedores",
+    Permission.SUPPLIERS_CREATE: "Dar de alta proveedores",
+    Permission.SUPPLIERS_UPDATE: "Editar proveedores",
+    Permission.SUPPLIERS_DELETE: "Eliminar proveedores",
 }
 
 ADMIN_ROLE = "admin"
@@ -82,6 +90,9 @@ SYSTEM_ROLES: tuple[SystemRole, ...] = (
             Permission.CUSTOMERS_CREATE.value,
             Permission.CUSTOMERS_UPDATE.value,
             Permission.CUSTOMERS_CREDIT.value,
+            Permission.SUPPLIERS_READ.value,
+            Permission.SUPPLIERS_CREATE.value,
+            Permission.SUPPLIERS_UPDATE.value,
         ),
     ),
     SystemRole(
@@ -93,6 +104,7 @@ SYSTEM_ROLES: tuple[SystemRole, ...] = (
             Permission.PRODUCTS_READ.value,
             Permission.CUSTOMERS_READ.value,
             Permission.CUSTOMERS_CREDIT.value,
+            Permission.SUPPLIERS_READ.value,
         ),
     ),
 )

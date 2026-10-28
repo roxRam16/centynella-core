@@ -27,6 +27,12 @@ from src.dtos.product import (
     ProductUpdateRequest,
 )
 from src.dtos.role import PermissionDTO, RoleCreateRequest, RoleDTO, RoleUpdateRequest
+from src.dtos.supplier import (
+    SupplierCreateRequest,
+    SupplierDTO,
+    SupplierPageDTO,
+    SupplierUpdateRequest,
+)
 from src.dtos.user import (
     ProfileDTO,
     ProfileUpdateRequest,
@@ -66,6 +72,10 @@ __all__ = [
     "RoleCreateRequest",
     "RoleDTO",
     "RoleUpdateRequest",
+    "SupplierCreateRequest",
+    "SupplierDTO",
+    "SupplierPageDTO",
+    "SupplierUpdateRequest",
     "TokenResponse",
     "UserCreateRequest",
     "UserDTO",

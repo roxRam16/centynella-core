@@ -16,6 +16,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SupplierDocument,
     UserDocument,
     new_id,
     utc_now,
@@ -195,6 +196,49 @@ class InMemoryCreditMovementRepository:
         return [m.model_copy(deep=True) for m in matches[start : start + page_size]], len(matches)
 
 
+class InMemorySupplierRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, SupplierDocument] = {}
+
+    async def create(self, supplier: SupplierDocument) -> SupplierDocument:
+        supplier.id = supplier.id or new_id()
+        self.items[supplier.id] = supplier.model_copy(deep=True)
+        return supplier
+
+    async def get(self, supplier_id: str) -> SupplierDocument | None:
+        supplier = self.items.get(supplier_id)
+        return supplier.model_copy(deep=True) if supplier else None
+
+    async def update(self, supplier_id: str, changes: dict[str, Any]) -> SupplierDocument | None:
+        supplier = self.items.get(supplier_id)
+        if supplier is None:
+            return None
+        self.items[supplier_id] = supplier.model_copy(update={**changes, "updated_at": utc_now()})
+        return self.items[supplier_id].model_copy(deep=True)
+
+    async def delete(self, supplier_id: str) -> bool:
+        return self.items.pop(supplier_id, None) is not None
+
+    async def list(
+        self, *, query: str | None, page: int, page_size: int
+    ) -> tuple[list[SupplierDocument], int]:
+        matches = [s for s in self.items.values() if self._matches(s, query)]
+        matches.sort(key=lambda s: (s.created_at, s.id), reverse=True)
+        start = (page - 1) * page_size
+        return [s.model_copy(deep=True) for s in matches[start : start + page_size]], len(matches)
+
+    @staticmethod
+    def _matches(supplier: SupplierDocument, query: str | None) -> bool:
+        if not query:
+            return True
+        needle = query.strip().lower()
+        return (
+            needle in supplier.name.lower()
+            or needle in (supplier.phone or "").lower()
+            or needle in supplier.products_supplied.lower()
+        )
+
+
 class InMemoryRoleRepository:
     def __init__(self) -> None:
         self.items: dict[str, RoleDocument] = {}
@@ -288,6 +332,7 @@ def build_in_memory_repositories() -> Repositories:
         products=InMemoryProductRepository(),
         customers=InMemoryCustomerRepository(),
         credit_movements=InMemoryCreditMovementRepository(),
+        suppliers=InMemorySupplierRepository(),
     )
 
 
