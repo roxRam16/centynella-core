@@ -112,6 +112,7 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | --- | --- | --- | --- |
 | GET | `/products` | 🛡 `products:read` | Listado paginado (`q`, `category`, `status`, `page`, `page_size`) |
 | POST | `/products` | 🛡 `products:create` | Dar de alta un producto (SKU único) |
+| POST | `/products/bulk` | 🛡 `products:create` | Alta/edición masiva (1-500 filas). Sin `id` = alta, con `id` = edición. "Mejor esfuerzo": devuelve 207 con el resultado fila por fila, una fila con error no tumba las demás |
 | GET | `/products/{id}` | 🛡 `products:read` | Ver un producto |
 | PATCH | `/products/{id}` | 🛡 `products:update` | Editar nombre, categoría, precio, costo, existencia, umbral, estado, código de barras, marca o descripción |
 | DELETE | `/products/{id}` | 🛡 `products:delete` | Eliminar un producto (también borra su foto) |
@@ -297,6 +298,16 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.9.0 — Alta/edición masiva de productos
+
+- `POST /products/bulk`: carga por lote (1-500 filas), pensada para la plantilla de Excel y la
+  cuadrícula tipo Excel del frontend. Cada fila sin `id` da de alta, cada fila con `id` edita.
+  "Mejor esfuerzo": una fila con error (SKU repetido, `id` inexistente…) no detiene a las demás;
+  responde 207 Multi-Status con el resultado de cada fila (`created` | `updated` | `error`, con
+  `code`/`error` cuando falla).
+- El parseo del Excel y la cuadrícula viven enteramente en el frontend (ExcelJS + jspreadsheet-ce);
+  este endpoint solo recibe JSON ya con la forma de un producto — nunca un archivo.
 
 ### 0.8.0 — Más datos de producto y foto
 

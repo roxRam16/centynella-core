@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, statu
 
 from src.dtos import (
     ProblemDetailsDTO,
+    ProductBulkRequest,
+    ProductBulkResponse,
+    ProductBulkRowResult,
     ProductCreateRequest,
     ProductDTO,
     ProductPageDTO,
@@ -81,6 +84,41 @@ async def create_product(
     )
     response.headers["Location"] = f"/api/v1/products/{product.id}"
     return ProductDTO.from_document(product)
+
+
+@router.post(
+    "/bulk",
+    response_model=ProductBulkResponse,
+    status_code=status.HTTP_207_MULTI_STATUS,
+    summary="Alta o edición masiva de productos",
+    description="Carga por lote (plantilla de Excel o cuadrícula tipo Excel): cada fila sin `id` "
+    'da de alta, cada fila con `id` edita. "Mejor esfuerzo": una fila con error (p. ej. SKU '
+    "repetido) no detiene a las demás — el resultado trae el detalle fila por fila. Requiere "
+    "`products:create`.",
+    responses={401: _E401, 403: _E403},
+)
+async def bulk_upsert_products(
+    body: ProductBulkRequest,
+    services: ServicesDep,
+    _: Annotated[CurrentUser, Depends(require_permission(Permission.PRODUCTS_CREATE))],
+) -> ProductBulkResponse:
+    outcomes = await services.products.bulk_upsert(body.items)
+    results = [
+        ProductBulkRowResult(
+            row=outcome.row,
+            outcome=outcome.outcome,
+            product=ProductDTO.from_document(outcome.product) if outcome.product else None,
+            error=outcome.error,
+            code=outcome.code,
+        )
+        for outcome in outcomes
+    ]
+    return ProductBulkResponse(
+        results=results,
+        created=sum(1 for r in results if r.outcome == "created"),
+        updated=sum(1 for r in results if r.outcome == "updated"),
+        failed=sum(1 for r in results if r.outcome == "error"),
+    )
 
 
 @router.get(

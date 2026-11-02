@@ -21,6 +21,10 @@ from src.dtos.health import HealthDTO, ReadinessDTO
 from src.dtos.log import LogEntryDTO, LogPageDTO
 from src.dtos.problem import ProblemDetailsDTO
 from src.dtos.product import (
+    ProductBulkRequest,
+    ProductBulkResponse,
+    ProductBulkRow,
+    ProductBulkRowResult,
     ProductCreateRequest,
     ProductDTO,
     ProductPageDTO,
@@ -61,6 +65,10 @@ __all__ = [
     "PasswordResetRequestCreate",
     "PermissionDTO",
     "ProblemDetailsDTO",
+    "ProductBulkRequest",
+    "ProductBulkResponse",
+    "ProductBulkRow",
+    "ProductBulkRowResult",
     "ProductCreateRequest",
     "ProductDTO",
     "ProductPageDTO",

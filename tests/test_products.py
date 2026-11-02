@@ -310,6 +310,126 @@ def test_subir_foto_requiere_products_update(client, register_user):
     assert response.status_code == 403
 
 
+# ── Carga masiva (plantilla de Excel o cuadrícula tipo Excel) ──────────────────────
+def test_alta_masiva_crea_varios_productos(client, admin_headers):
+    response = client.post(
+        f"{PRODUCTS_URL}/bulk",
+        json={
+            "items": [
+                {"sku": "BULK-1", "name": "Producto masivo 1", "price": 10, "quantity": 5},
+                {"sku": "BULK-2", "name": "Producto masivo 2", "price": 20, "quantity": 8},
+            ]
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 207
+    body = response.json()
+    assert body["created"] == 2
+    assert body["updated"] == 0
+    assert body["failed"] == 0
+    assert [r["outcome"] for r in body["results"]] == ["created", "created"]
+    assert body["results"][0]["product"]["sku"] == "BULK-1"
+
+
+def test_alta_masiva_edita_un_producto_existente_por_id(client, admin_headers):
+    created = create_product(client, admin_headers, sku="BULK-EDIT")
+
+    response = client.post(
+        f"{PRODUCTS_URL}/bulk",
+        json={
+            "items": [
+                {
+                    "id": created["id"],
+                    "sku": created["sku"],
+                    "name": "Nombre editado",
+                    "price": 99,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 207
+    body = response.json()
+    assert body["updated"] == 1
+    assert body["results"][0]["outcome"] == "updated"
+    assert body["results"][0]["product"]["name"] == "Nombre editado"
+
+
+def test_alta_masiva_mejor_esfuerzo_una_fila_mala_no_tumba_las_demas(client, admin_headers):
+    create_product(client, admin_headers, sku="YA-EXISTE")
+
+    response = client.post(
+        f"{PRODUCTS_URL}/bulk",
+        json={
+            "items": [
+                {"sku": "BULK-OK", "name": "Producto bueno", "price": 10, "quantity": 1},
+                {"sku": "YA-EXISTE", "name": "SKU repetido", "price": 10, "quantity": 1},
+            ]
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 207
+    body = response.json()
+    assert body["created"] == 1
+    assert body["failed"] == 1
+    assert body["results"][0]["outcome"] == "created"
+    assert body["results"][1]["outcome"] == "error"
+    assert body["results"][1]["code"] == "sku_taken"
+    assert body["results"][1]["row"] == 1
+
+    # La fila buena sí quedó guardada de verdad.
+    assert (
+        client.get(PRODUCTS_URL, params={"q": "BULK-OK"}, headers=admin_headers).json()["total"]
+        == 1
+    )
+
+
+def test_alta_masiva_editar_un_id_inexistente_reporta_error_en_esa_fila(client, admin_headers):
+    response = client.post(
+        f"{PRODUCTS_URL}/bulk",
+        json={
+            "items": [
+                {
+                    "id": "no-existe",
+                    "sku": "X-1",
+                    "name": "No existe",
+                    "price": 1,
+                    "quantity": 1,
+                }
+            ]
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 207
+    body = response.json()
+    assert body["failed"] == 1
+    assert body["results"][0]["code"] == "product_not_found"
+
+
+def test_alta_masiva_vacia_da_422(client, admin_headers):
+    response = client.post(f"{PRODUCTS_URL}/bulk", json={"items": []}, headers=admin_headers)
+
+    assert response.status_code == 422
+
+
+def test_alta_masiva_requiere_products_create(client, register_user):
+    register_user()
+    token = login(client, "ana@example.com", USER_PASSWORD)["access_token"]
+
+    response = client.post(
+        f"{PRODUCTS_URL}/bulk",
+        json={"items": [{"sku": "X-1", "name": "Producto", "price": 1, "quantity": 1}]},
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 403
+
+
 # ── Validación ─────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     ("field", "value"),

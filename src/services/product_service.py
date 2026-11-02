@@ -1,10 +1,31 @@
 """Catálogo de productos: alta, edición, baja y consulta con existencia."""
 
+# `from __future__ import annotations`: diferir las anotaciones a texto. Sin esto, el método
+# `list` de esta clase se cuela como nombre local y rompe `list[...]` en las anotaciones que
+# vienen después de él en el mismo cuerpo de clase (ej. en `bulk_upsert`).
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
 from src.database import DuplicateError, Repositories
+from src.dtos.product import ProductBulkRow
 from src.models import ProductDocument, ProductStatus
-from src.services.errors import ConflictError, NotFoundError
+from src.services.errors import ConflictError, DomainError, NotFoundError
 from src.services.event_logger import EventLogger
 from src.services.image_storage import ProductImageStorage
+
+
+@dataclass
+class ProductBulkOutcome:
+    """Resultado de una fila de `bulk_upsert`. No es un DTO (no viaja tal cual por HTTP): la
+    ruta lo traduce a `ProductBulkRowResult`."""
+
+    row: int
+    outcome: Literal["created", "updated", "error"]
+    product: ProductDocument | None = None
+    error: str | None = None
+    code: str | None = None
 
 
 class ProductService:
@@ -126,6 +147,71 @@ class ProductService:
                 changed=sorted(changes),
             )
         return updated
+
+    async def bulk_upsert(self, rows: list[ProductBulkRow]) -> list[ProductBulkOutcome]:
+        """Alta o edición masiva (plantilla de Excel o cuadrícula): "mejor esfuerzo" — una fila
+        con error (p. ej. SKU repetido) no detiene a las demás; cada una reporta su resultado.
+
+        Excepción deliberada a la convención del resto de la clase (recibir campos sueltos, no
+        un DTO): desenvolver 12 campos por fila, por fila, no aporta nada aquí.
+        """
+        results: list[ProductBulkOutcome] = []
+        for index, row in enumerate(rows):
+            try:
+                if row.id:
+                    product = await self.update(
+                        row.id,
+                        name=row.name,
+                        category=row.category,
+                        unit=row.unit,
+                        price=row.price,
+                        quantity=row.quantity,
+                        low_stock_threshold=row.low_stock_threshold,
+                        status=row.status,
+                        barcode=row.barcode,
+                        brand=row.brand,
+                        description=row.description,
+                        cost=row.cost,
+                    )
+                    results.append(
+                        ProductBulkOutcome(row=index, outcome="updated", product=product)
+                    )
+                else:
+                    product = await self.create(
+                        sku=row.sku,
+                        name=row.name,
+                        category=row.category,
+                        unit=row.unit,
+                        price=row.price,
+                        quantity=row.quantity,
+                        low_stock_threshold=row.low_stock_threshold,
+                        status=row.status,
+                        barcode=row.barcode,
+                        brand=row.brand,
+                        description=row.description,
+                        cost=row.cost,
+                    )
+                    results.append(
+                        ProductBulkOutcome(row=index, outcome="created", product=product)
+                    )
+            except DomainError as error:
+                results.append(
+                    ProductBulkOutcome(
+                        row=index, outcome="error", error=error.detail, code=error.code
+                    )
+                )
+        created = sum(1 for r in results if r.outcome == "created")
+        updated = sum(1 for r in results if r.outcome == "updated")
+        failed = sum(1 for r in results if r.outcome == "error")
+        self._events.info(
+            "products",
+            "products.bulk_upserted",
+            "Carga masiva de productos procesada",
+            created=created,
+            updated=updated,
+            failed=failed,
+        )
+        return results
 
     async def delete(self, product_id: str) -> None:
         await self.get(product_id)
