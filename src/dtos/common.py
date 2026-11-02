@@ -114,3 +114,7 @@ Phone = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9+
 
 # Código de producto: normalizado a mayúsculas.
 Sku = Annotated[str, StringConstraints(strip_whitespace=True), AfterValidator(_check_sku)]
+
+# Código de barras (EAN-8/EAN-13/UPC-A y variantes): solo dígitos, sin ceros a la izquierda
+# forzados (se guarda tal cual lo lee el lector).
+Barcode = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[0-9]{6,20}$")]

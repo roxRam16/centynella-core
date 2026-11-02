@@ -1,8 +1,9 @@
 """Catálogo de productos (con control de permisos)."""
 
 import pytest
+from fastapi.testclient import TestClient
 
-from tests.conftest import USER_PASSWORD, auth_headers, login
+from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, USER_PASSWORD, auth_headers, login
 
 PRODUCTS_URL = "/api/v1/products"
 
@@ -21,6 +22,13 @@ def create_product(client, headers, **overrides) -> dict:
     response = client.post(PRODUCTS_URL, json=payload, headers=headers)
     assert response.status_code == 201, response.text
     return response.json()
+
+
+# Firma mínima de cada formato (ver `src.services.image_storage._detect_extension`): no hace
+# falta un archivo real, solo los bytes que la validación realmente mira.
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+JPEG_BYTES = b"\xff\xd8\xff" + b"0" * 32
+WEBP_BYTES = b"RIFF\x00\x00\x00\x00WEBP" + b"0" * 32
 
 
 def manager_headers(client, admin_headers) -> dict[str, str]:
@@ -169,6 +177,137 @@ def test_eliminar_un_producto_inexistente_da_404(client, admin_headers):
     response = client.delete(f"{PRODUCTS_URL}/no-existe", headers=admin_headers)
 
     assert response.status_code == 404
+
+
+# ── Campos adicionales (código de barras, marca, descripción, costo) ───────────────
+def test_crea_un_producto_con_los_campos_adicionales(client, admin_headers):
+    created = create_product(
+        client,
+        admin_headers,
+        barcode="7501234567890",
+        brand="Coca-Cola",
+        description="Refresco de cola en botella de vidrio retornable.",
+        cost=12.3,
+    )
+
+    assert created["barcode"] == "7501234567890"
+    assert created["brand"] == "Coca-Cola"
+    assert created["description"] == "Refresco de cola en botella de vidrio retornable."
+    assert created["cost"] == 12.3
+    assert created["image_url"] is None
+
+
+def test_codigo_de_barras_invalido_da_422(client, admin_headers):
+    response = client.post(
+        PRODUCTS_URL,
+        json={"sku": "BAR-1", "name": "Producto válido", "barcode": "abc123"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+
+
+# ── Foto del producto ────────────────────────────────────────────────────────────────
+def test_sube_y_reemplaza_la_foto_de_un_producto(client, admin_headers):
+    created = create_product(client, admin_headers)
+
+    subida = client.post(
+        f"{PRODUCTS_URL}/{created['id']}/image",
+        files={"file": ("foto.png", PNG_BYTES, "image/png")},
+        headers=admin_headers,
+    )
+    assert subida.status_code == 200
+    assert subida.json()["image_url"] == f"/media/products/{created['id']}.png"
+
+    # Reemplazar con otro formato: la ruta cambia de extensión y no quedan dos archivos.
+    reemplazo = client.post(
+        f"{PRODUCTS_URL}/{created['id']}/image",
+        files={"file": ("foto.jpg", JPEG_BYTES, "image/jpeg")},
+        headers=admin_headers,
+    )
+    assert reemplazo.status_code == 200
+    assert reemplazo.json()["image_url"] == f"/media/products/{created['id']}.jpg"
+
+
+def test_acepta_webp(client, admin_headers):
+    created = create_product(client, admin_headers)
+
+    response = client.post(
+        f"{PRODUCTS_URL}/{created['id']}/image",
+        files={"file": ("foto.webp", WEBP_BYTES, "image/webp")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["image_url"] == f"/media/products/{created['id']}.webp"
+
+
+def test_rechaza_un_archivo_que_no_es_imagen(client, admin_headers):
+    created = create_product(client, admin_headers)
+
+    response = client.post(
+        f"{PRODUCTS_URL}/{created['id']}/image",
+        files={"file": ("nota.txt", b"esto no es una imagen", "text/plain")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "unsupported_image_type"
+
+
+def test_rechaza_una_imagen_demasiado_grande(settings, make_app):
+    app = make_app(settings=settings.model_copy(update={"max_image_bytes": 1024}))
+
+    with TestClient(app) as small_client:
+        headers = auth_headers(login(small_client, ADMIN_EMAIL, ADMIN_PASSWORD)["access_token"])
+        created = create_product(small_client, headers)
+
+        big_png = b"\x89PNG\r\n\x1a\n" + b"0" * 2000
+        response = small_client.post(
+            f"{PRODUCTS_URL}/{created['id']}/image",
+            files={"file": ("foto.png", big_png, "image/png")},
+            headers=headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["code"] == "image_too_large"
+
+
+def test_quita_la_foto_de_un_producto(client, admin_headers):
+    created = create_product(client, admin_headers)
+    client.post(
+        f"{PRODUCTS_URL}/{created['id']}/image",
+        files={"file": ("foto.png", PNG_BYTES, "image/png")},
+        headers=admin_headers,
+    )
+
+    response = client.delete(f"{PRODUCTS_URL}/{created['id']}/image", headers=admin_headers)
+
+    assert response.status_code == 200
+    assert response.json()["image_url"] is None
+
+
+def test_subir_foto_a_un_producto_inexistente_da_404(client, admin_headers):
+    response = client.post(
+        f"{PRODUCTS_URL}/no-existe/image",
+        files={"file": ("foto.png", PNG_BYTES, "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_subir_foto_requiere_products_update(client, register_user):
+    register_user()
+    token = login(client, "ana@example.com", USER_PASSWORD)["access_token"]
+
+    response = client.post(
+        f"{PRODUCTS_URL}/no-importa/image",
+        files={"file": ("foto.png", PNG_BYTES, "image/png")},
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 403
 
 
 # ── Validación ─────────────────────────────────────────────────────────────────────

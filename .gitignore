@@ -19,6 +19,9 @@ htmlcov/
 private/.env*
 !private/.env.example
 
+# Imágenes de producto subidas en local (ver `ProductImageStorage`): nunca se versionan.
+media/
+
 # Editor / SO
 .vscode/*
 !.vscode/extensions.json

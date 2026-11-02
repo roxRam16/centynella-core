@@ -31,6 +31,10 @@ services:
     env_file: private/.env.sandbox
     ports:
       - '8000:8000'
+    volumes:
+      # Fotos de producto (ver `ProductImageStorage`): persisten entre `docker compose up` locales.
+      - media-data:/code/media
 
 volumes:
   mongo-data:
+  media-data:

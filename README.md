@@ -113,8 +113,10 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | GET | `/products` | 🛡 `products:read` | Listado paginado (`q`, `category`, `status`, `page`, `page_size`) |
 | POST | `/products` | 🛡 `products:create` | Dar de alta un producto (SKU único) |
 | GET | `/products/{id}` | 🛡 `products:read` | Ver un producto |
-| PATCH | `/products/{id}` | 🛡 `products:update` | Editar nombre, categoría, precio, existencia, umbral o estado |
-| DELETE | `/products/{id}` | 🛡 `products:delete` | Eliminar un producto |
+| PATCH | `/products/{id}` | 🛡 `products:update` | Editar nombre, categoría, precio, costo, existencia, umbral, estado, código de barras, marca o descripción |
+| DELETE | `/products/{id}` | 🛡 `products:delete` | Eliminar un producto (también borra su foto) |
+| POST | `/products/{id}/image` | 🛡 `products:update` | Subir/reemplazar la foto (JPG, PNG o WEBP, máx. `MAX_IMAGE_BYTES`) |
+| DELETE | `/products/{id}/image` | 🛡 `products:update` | Quitar la foto |
 
 **Clientes y fiado** (`/customers`)
 
@@ -183,7 +185,7 @@ Para registrar un evento nuevo en un servicio: `self._events.info("modulo", "mod
 - **Contraseña nueva:** 8-128 caracteres con **mayúscula, minúscula, número y símbolo**, sin espacios ni caracteres de control. Se guarda con Argon2id; puede llevar cualquier símbolo porque nunca se muestra.
 - **Nombres** (solo letras de cualquier idioma, espacios, apóstrofes, puntos y guiones) y **textos libres** (sin `< >` ni caracteres de control): no se guarda marcado HTML/scripts. La interfaz además escapa al mostrar.
 - **Cabeceras** en toda respuesta: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cache-Control: no-store` y CSP `default-src 'none'` (Swagger queda exento para poder cargar); HSTS en producción.
-- **Tamaño:** cuerpos > 1 MB (`MAX_REQUEST_BODY_BYTES`) se rechazan con 413, también si llegan por trozos.
+- **Tamaño:** cuerpos > `MAX_REQUEST_BODY_BYTES` (8 MB por defecto, cubre la subida de imágenes) se rechazan con 413, también si llegan por trozos.
 
 ## Convenciones RESTful
 
@@ -207,7 +209,9 @@ Variables en `private/.env.<ambiente>` (elige el ambiente con `APP_ENV`, por def
 | `MONGODB_TIMEOUT_MS` | Timeout de selección de servidor | `2000` |
 | `MONGODB_LOGS_DB` | Base de datos de la bitácora (separada) | `centynella_logs` |
 | `LOG_RETENTION_DAYS` · `LOG_MIN_LEVEL` | Días que se conservan los eventos · nivel mínimo que se guarda | `30` · `INFO` |
-| `MAX_REQUEST_BODY_BYTES` | Tamaño máximo del cuerpo de una petición | `1048576` |
+| `MAX_REQUEST_BODY_BYTES` | Tamaño máximo del cuerpo de una petición | `8388608` |
+| `MEDIA_DIR` | Carpeta de fotos de producto (relativa a la raíz; servida en `/media`) | `media` |
+| `MAX_IMAGE_BYTES` | Tamaño máximo de una foto de producto | `5242880` |
 | `JWT_SECRET_KEY` | **Obligatoria** (≥ 32 caracteres); firma los JWT. Distinta por ambiente | — |
 | `FRONTEND_URL` | URL pública del shell (enlace de recuperación) | `http://localhost:5173` |
 | `BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | Administrador inicial (solo con la base vacía) | — |
@@ -293,6 +297,17 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.8.0 — Más datos de producto y foto
+
+- `products` gana `barcode` (código de barras, 6-20 dígitos), `brand`, `description` y `cost`
+  (lo que cuesta el producto, para calcular margen más adelante — distinto de `price`, lo que se
+  cobra).
+- `POST /products/{id}/image` y `DELETE /products/{id}/image`: sube o quita la foto del producto
+  (JPG/PNG/WEBP). MVP: se guarda en disco local (`media/products/<id>.<ext>`, servido en
+  `/media/...`) detrás de `ProductImageStorage` — el día que haga falta mover a S3, cambia solo
+  esa clase. `MAX_REQUEST_BODY_BYTES` subió de 1 MB a 8 MB para dar cabida a la subida.
+- Eliminar un producto también borra su foto.
 
 ### 0.7.0 — Proveedores (directorio simple)
 - Nuevo módulo `suppliers`: alta, edición, baja y listado (búsqueda por nombre, teléfono o lo que surte, paginación). Sin saldo ni movimientos — a diferencia de `customers`, es un directorio simple; órdenes de compra quedan fuera de alcance por ahora.

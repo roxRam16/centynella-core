@@ -42,8 +42,15 @@ class Settings(BaseSettings):
     log_retention_days: int = Field(default=30, ge=1)
     log_flush_interval_seconds: float = Field(default=1.0, ge=0)
     log_min_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    # Tamaño máximo del cuerpo de una petición (protección contra abusos).
-    max_request_body_bytes: int = Field(default=1_048_576, ge=1024)
+    # Tamaño máximo del cuerpo de una petición (protección contra abusos). Debe cubrir
+    # `max_image_bytes` + el overhead del multipart de la subida de imágenes.
+    max_request_body_bytes: int = Field(default=8_388_608, ge=1024)
+
+    # Imágenes de producto: carpeta en disco (relativa a la raíz del proyecto) y tamaño máximo.
+    # MVP: disco local. En un despliegue real a ECS el disco no persiste entre despliegues —
+    # mover a S3 detrás de la misma interfaz de `ProductImageStorage` cuando haga falta.
+    media_dir: str = "media"
+    max_image_bytes: int = Field(default=5_242_880, ge=1024)
 
     # Orígenes permitidos por CORS (el shell del MFE). Separados por coma en el .env.
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
@@ -100,6 +107,13 @@ class Settings(BaseSettings):
     def cookie_secure(self) -> bool:
         """La cookie de sesión solo viaja por HTTPS en producción."""
         return self.app_env == "production"
+
+    @property
+    def media_path(self) -> Path:
+        """Ruta absoluta de la carpeta de imágenes, creada si no existe."""
+        path = PROJECT_ROOT / self.media_dir
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
 
 def resolve_env_file(app_env: str | None = None) -> Path:

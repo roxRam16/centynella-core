@@ -24,3 +24,9 @@ class ProductDocument(BaseDocument):
     quantity: int = 0
     low_stock_threshold: int = 5
     status: ProductStatus = "active"
+    barcode: str | None = None
+    brand: str = ""
+    description: str = ""
+    cost: float = 0.0
+    # Ruta relativa dentro de `media_dir` (p. ej. "products/<id>.jpg"); `None` sin foto.
+    image_path: str | None = None

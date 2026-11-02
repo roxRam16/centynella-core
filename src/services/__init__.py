@@ -11,6 +11,7 @@ from src.services.email_sender import EmailSender, LogEmailSender
 from src.services.event_logger import BridgeLogHandler, EventLogger, mask_email
 from src.services.greeting_service import GreetingService
 from src.services.health_service import HealthService
+from src.services.image_storage import ProductImageStorage
 from src.services.log_service import LogService
 from src.services.password_hasher import PasswordHasher
 from src.services.product_service import ProductService
@@ -46,11 +47,12 @@ def build_services(
     """Cablea los servicios (composition root de la capa de negocio)."""
     hasher = PasswordHasher()
     tokens = TokenService(settings)
+    images = ProductImageStorage(settings.media_path, max_bytes=settings.max_image_bytes)
     return Services(
         auth=AuthService(settings, repositories, hasher, tokens, email_sender, events),
         users=UserService(repositories, hasher, events),
         roles=RoleService(repositories, events),
-        products=ProductService(repositories, events),
+        products=ProductService(repositories, events, images),
         customers=CustomerService(repositories, events),
         suppliers=SupplierService(repositories, events),
         logs=LogService(log_repository),
@@ -72,6 +74,7 @@ __all__ = [
     "HealthService",
     "LogEmailSender",
     "PasswordHasher",
+    "ProductImageStorage",
     "ProductService",
     "RoleService",
     "Services",

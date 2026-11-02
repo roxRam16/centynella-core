@@ -36,7 +36,7 @@ def fast_password_hashing(monkeypatch):
 
 
 @pytest.fixture
-def settings() -> Settings:
+def settings(tmp_path) -> Settings:
     return Settings(
         _env_file=None,  # type: ignore[call-arg]
         app_name="CENTYNELLA-CORE",
@@ -48,6 +48,11 @@ def settings() -> Settings:
         bootstrap_admin_password=ADMIN_PASSWORD,
         frontend_url="http://localhost:5173",
         log_flush_interval_seconds=0,  # la bitácora se escribe al instante en las pruebas
+        # Valor fijo (no el default de producción, que subió por las imágenes de producto):
+        # las pruebas de `test_input_validation.py` dependen de este número exacto.
+        max_request_body_bytes=1_048_576,
+        # Carpeta de imágenes aislada por prueba: no ensucia `media/` del repo.
+        media_dir=str(tmp_path / "media"),
     )
 
 

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 
 from src.dtos import (
     ProblemDetailsDTO,
@@ -16,6 +16,7 @@ from src.routes.dependencies import CurrentUser, ServicesDep, require_permission
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
+_E400 = {"model": ProblemDetailsDTO, "description": "Imagen inválida."}
 _E401 = {"model": ProblemDetailsDTO, "description": "No autenticado."}
 _E403 = {"model": ProblemDetailsDTO, "description": "Sin permiso para esta acción."}
 _E404 = {"model": ProblemDetailsDTO, "description": "Producto no encontrado."}
@@ -73,6 +74,10 @@ async def create_product(
         quantity=body.quantity,
         low_stock_threshold=body.low_stock_threshold,
         status=body.status,
+        barcode=body.barcode,
+        brand=body.brand,
+        description=body.description,
+        cost=body.cost,
     )
     response.headers["Location"] = f"/api/v1/products/{product.id}"
     return ProductDTO.from_document(product)
@@ -112,7 +117,45 @@ async def update_product(
         quantity=body.quantity,
         low_stock_threshold=body.low_stock_threshold,
         status=body.status,
+        barcode=body.barcode,
+        brand=body.brand,
+        description=body.description,
+        cost=body.cost,
     )
+    return ProductDTO.from_document(product)
+
+
+@router.post(
+    "/{product_id}/image",
+    response_model=ProductDTO,
+    summary="Subir la foto de un producto",
+    description="JPG, PNG o WEBP. Reemplaza la foto anterior si había. Requiere `products:update`.",
+    responses={400: _E400, 401: _E401, 403: _E403, 404: _E404},
+)
+async def upload_product_image(
+    product_id: str,
+    services: ServicesDep,
+    _: Annotated[CurrentUser, Depends(require_permission(Permission.PRODUCTS_UPDATE))],
+    file: Annotated[UploadFile, File(description="Imagen JPG, PNG o WEBP.")],
+) -> ProductDTO:
+    content = await file.read()
+    product = await services.products.set_image(product_id, content)
+    return ProductDTO.from_document(product)
+
+
+@router.delete(
+    "/{product_id}/image",
+    response_model=ProductDTO,
+    summary="Quitar la foto de un producto",
+    description="Requiere `products:update`.",
+    responses={401: _E401, 403: _E403, 404: _E404},
+)
+async def delete_product_image(
+    product_id: str,
+    services: ServicesDep,
+    _: Annotated[CurrentUser, Depends(require_permission(Permission.PRODUCTS_UPDATE))],
+) -> ProductDTO:
+    product = await services.products.remove_image(product_id)
     return ProductDTO.from_document(product)
 
 

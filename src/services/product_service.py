@@ -4,12 +4,19 @@ from src.database import DuplicateError, Repositories
 from src.models import ProductDocument, ProductStatus
 from src.services.errors import ConflictError, NotFoundError
 from src.services.event_logger import EventLogger
+from src.services.image_storage import ProductImageStorage
 
 
 class ProductService:
-    def __init__(self, repositories: Repositories, events: EventLogger) -> None:
+    def __init__(
+        self,
+        repositories: Repositories,
+        events: EventLogger,
+        images: ProductImageStorage,
+    ) -> None:
         self._events = events
         self._products = repositories.products
+        self._images = images
 
     async def get(self, product_id: str) -> ProductDocument:
         product = await self._products.get(product_id)
@@ -41,6 +48,10 @@ class ProductService:
         quantity: int,
         low_stock_threshold: int,
         status: ProductStatus,
+        barcode: str | None,
+        brand: str,
+        description: str,
+        cost: float,
     ) -> ProductDocument:
         product = ProductDocument(
             sku=sku,
@@ -51,6 +62,10 @@ class ProductService:
             quantity=quantity,
             low_stock_threshold=low_stock_threshold,
             status=status,
+            barcode=barcode,
+            brand=brand,
+            description=description,
+            cost=cost,
         )
         try:
             created = await self._products.create(product)
@@ -72,6 +87,10 @@ class ProductService:
         quantity: int | None,
         low_stock_threshold: int | None,
         status: ProductStatus | None,
+        barcode: str | None,
+        brand: str | None,
+        description: str | None,
+        cost: float | None,
     ) -> ProductDocument:
         await self.get(product_id)  # 404 temprano si no existe
         changes: dict = {}
@@ -83,6 +102,10 @@ class ProductService:
             ("quantity", quantity),
             ("low_stock_threshold", low_stock_threshold),
             ("status", status),
+            ("barcode", barcode),
+            ("brand", brand),
+            ("description", description),
+            ("cost", cost),
         ):
             if value is not None:
                 changes[field] = value
@@ -107,6 +130,36 @@ class ProductService:
     async def delete(self, product_id: str) -> None:
         await self.get(product_id)
         await self._products.delete(product_id)
+        self._images.delete(product_id)
         self._events.warning(
             "products", "products.deleted", "Producto eliminado", target_product_id=product_id
         )
+
+    async def set_image(self, product_id: str, content: bytes) -> ProductDocument:
+        """Valida y guarda la foto del producto (JPG/PNG/WEBP); reemplaza la anterior si había."""
+        await self.get(product_id)  # 404 temprano si no existe
+        relative_path = self._images.save(product_id, content)
+        updated = await self._products.update(product_id, {"image_path": relative_path})
+        if updated is None:
+            raise NotFoundError("Producto no encontrado.", code="product_not_found")
+        self._events.info(
+            "products",
+            "products.image_set",
+            "Foto del producto actualizada",
+            target_product_id=product_id,
+        )
+        return updated
+
+    async def remove_image(self, product_id: str) -> ProductDocument:
+        await self.get(product_id)  # 404 temprano si no existe
+        self._images.delete(product_id)
+        updated = await self._products.update(product_id, {"image_path": None})
+        if updated is None:
+            raise NotFoundError("Producto no encontrado.", code="product_not_found")
+        self._events.info(
+            "products",
+            "products.image_removed",
+            "Foto del producto eliminada",
+            target_product_id=product_id,
+        )
+        return updated

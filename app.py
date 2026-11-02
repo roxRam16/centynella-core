@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.config import Settings, get_settings
 from src.database import (
@@ -207,6 +208,9 @@ def create_app(
 
     app.include_router(health_router)
     app.include_router(api_v1_router)
+    # Imágenes de producto (MVP: disco local, ver `ProductImageStorage`). Fuera de `/api/v1`:
+    # no es un recurso de la API, es un archivo estático.
+    app.mount("/media", StaticFiles(directory=settings.media_path), name="media")
     return app
 
 

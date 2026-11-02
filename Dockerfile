@@ -26,8 +26,13 @@ RUN pip install -r requirements.txt
 COPY app.py .
 COPY src ./src
 
-# Ejecutar como usuario sin privilegios
-RUN adduser --system --no-create-home --group centynella
+# Ejecutar como usuario sin privilegios. `media/` (fotos de producto, ver `ProductImageStorage`)
+# se crea y se le da dueño ANTES de bajar privilegios: si no, el usuario sin privilegios no
+# puede crearla en tiempo de ejecución. MVP: disco del contenedor, no persiste entre despliegues
+# de ECS — mover a S3 detrás de la misma interfaz cuando haga falta (ver `image_storage.py`).
+RUN adduser --system --no-create-home --group centynella \
+    && mkdir -p /code/media \
+    && chown -R centynella:centynella /code/media
 USER centynella
 
 EXPOSE 8000
