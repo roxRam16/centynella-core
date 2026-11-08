@@ -13,7 +13,9 @@ services:
     container_name: centynella-mongo
     restart: unless-stopped
     ports:
-      - '27017:27017'
+      # 27018 en el host (no 27017): otro proyecto local ya ocupa 27017:27017. Dentro de la red
+      # de Docker el contenedor sigue siendo mongo:27017 (ver MONGODB_URI arriba).
+      - '27018:27017'
     volumes:
       - mongo-data:/data/db
     healthcheck:

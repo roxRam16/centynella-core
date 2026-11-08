@@ -274,7 +274,7 @@ Las unitarias inyectan repositorios **en memoria** (`tests/fakes.py`) y un remit
 
 ```bash
 docker compose up -d --build                 # API (:8000) contra MongoDB Atlas (sandbox)
-docker compose --profile local up -d mongo   # opcional: Mongo local (:27017)
+docker compose --profile local up -d mongo   # opcional: Mongo local (:27018 en el host; 27017 adentro)
 docker compose down                          # detiene la API
 
 # Solo la imagen de la API
@@ -282,7 +282,9 @@ docker build -t centynella-core .
 docker run --rm -p 8000:8000 --env-file private/.env.sandbox centynella-core
 ```
 
-La imagen usa `python:3.12-slim`, corre como usuario sin privilegios e incluye `HEALTHCHECK` sobre `/health`.
+La imagen usa `python:3.12-slim`, corre como usuario sin privilegios e incluye `HEALTHCHECK` sobre `/health`. El Mongo local se expone en `27018` (no `27017`) porque otro proyecto local ya ocupaba ese puerto; dentro de la red de Docker sigue siendo `mongo:27017` — no cambia `MONGODB_URI` ni nada que corra adentro del contenedor.
+
+Para levantar los 4 servicios de CENTYNELLA juntos (este + shell + los 2 microfrontends standalone), ver [docker-compose.yml](../centynella-mfe/docker-compose.yml) de `centynella-mfe`.
 
 ## CI/CD
 
@@ -298,6 +300,13 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.9.1 — Mongo local del `docker compose --profile local` en el puerto 27018
+
+- El puerto del host cambió de `27017` a `27018` (otro proyecto local ya ocupaba `27017:27017`).
+  Dentro de la red de Docker sigue siendo `mongo:27017`, así que `MONGODB_URI` no cambia.
+- Forma parte de dockerizar CENTYNELLA completo (API + shell + 2 remotes) con un
+  `docker-compose.yml` nuevo en `centynella-mfe` — ver su historial de cambios.
 
 ### 0.9.0 — Alta/edición masiva de productos
 
