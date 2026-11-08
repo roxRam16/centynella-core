@@ -16,6 +16,7 @@ from src.services.log_service import LogService
 from src.services.password_hasher import PasswordHasher
 from src.services.product_service import ProductService
 from src.services.role_service import RoleService
+from src.services.sale_service import SaleService
 from src.services.supplier_service import SupplierService
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
@@ -31,6 +32,7 @@ class Services:
     products: ProductService
     customers: CustomerService
     suppliers: SupplierService
+    sales: SaleService
     logs: LogService
     events: EventLogger
     tokens: TokenService
@@ -48,13 +50,16 @@ def build_services(
     hasher = PasswordHasher()
     tokens = TokenService(settings)
     images = ProductImageStorage(settings.media_path, max_bytes=settings.max_image_bytes)
+    products = ProductService(repositories, events, images)
+    customers = CustomerService(repositories, events)
     return Services(
         auth=AuthService(settings, repositories, hasher, tokens, email_sender, events),
         users=UserService(repositories, hasher, events),
         roles=RoleService(repositories, events),
-        products=ProductService(repositories, events, images),
-        customers=CustomerService(repositories, events),
+        products=products,
+        customers=customers,
         suppliers=SupplierService(repositories, events),
+        sales=SaleService(repositories, events, products, customers),
         logs=LogService(log_repository),
         events=events,
         tokens=tokens,
@@ -77,6 +82,7 @@ __all__ = [
     "ProductImageStorage",
     "ProductService",
     "RoleService",
+    "SaleService",
     "Services",
     "SupplierService",
     "TokenService",

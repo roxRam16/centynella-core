@@ -221,6 +221,14 @@ class ProductService:
             "products", "products.deleted", "Producto eliminado", target_product_id=product_id
         )
 
+    async def decrement_stock(self, product_id: str, quantity: int) -> ProductDocument:
+        """Resta `quantity` de la existencia (al cerrar una venta). Un `quantity` negativo repone
+        — lo usa `SaleService` para revertir el descuento si la venta falla a medio camino."""
+        updated = await self._products.adjust_quantity(product_id, -quantity)
+        if updated is None:
+            raise NotFoundError("Producto no encontrado.", code="product_not_found")
+        return updated
+
     async def set_image(self, product_id: str, content: bytes) -> ProductDocument:
         """Valida y guarda la foto del producto (JPG/PNG/WEBP); reemplaza la anterior si había."""
         await self.get(product_id)  # 404 temprano si no existe

@@ -31,6 +31,13 @@ from src.dtos.product import (
     ProductUpdateRequest,
 )
 from src.dtos.role import PermissionDTO, RoleCreateRequest, RoleDTO, RoleUpdateRequest
+from src.dtos.sale import (
+    SaleCreateRequest,
+    SaleDTO,
+    SaleItemDTO,
+    SaleLineRequest,
+    SalePageDTO,
+)
 from src.dtos.supplier import (
     SupplierCreateRequest,
     SupplierDTO,
@@ -80,6 +87,11 @@ __all__ = [
     "RoleCreateRequest",
     "RoleDTO",
     "RoleUpdateRequest",
+    "SaleCreateRequest",
+    "SaleDTO",
+    "SaleItemDTO",
+    "SaleLineRequest",
+    "SalePageDTO",
     "SupplierCreateRequest",
     "SupplierDTO",
     "SupplierPageDTO",

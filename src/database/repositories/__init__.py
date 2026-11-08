@@ -17,6 +17,7 @@ from src.database.repositories.interfaces import (
     ProductRepository,
     RefreshTokenRepository,
     RoleRepository,
+    SaleRepository,
     SupplierRepository,
     UserRepository,
 )
@@ -28,6 +29,7 @@ from src.database.repositories.mongo import (
     MongoProductRepository,
     MongoRefreshTokenRepository,
     MongoRoleRepository,
+    MongoSaleRepository,
     MongoSupplierRepository,
     MongoUserRepository,
 )
@@ -43,6 +45,7 @@ class Repositories:
     customers: CustomerRepository
     credit_movements: CreditMovementRepository
     suppliers: SupplierRepository
+    sales: SaleRepository
 
     async def ensure_indexes(self) -> None:
         """Crea los índices de los repositorios que los necesitan (idempotente)."""
@@ -55,6 +58,7 @@ class Repositories:
             self.customers,
             self.credit_movements,
             self.suppliers,
+            self.sales,
         )
         for repository in repos:
             ensure = getattr(repository, "ensure_indexes", None)
@@ -73,6 +77,7 @@ def build_mongo_repositories(db: AsyncDatabase) -> Repositories:
         customers=MongoCustomerRepository(db),
         credit_movements=MongoCreditMovementRepository(db),
         suppliers=MongoSupplierRepository(db),
+        sales=MongoSaleRepository(db),
     )
 
 
@@ -88,6 +93,7 @@ __all__ = [
     "MongoProductRepository",
     "MongoRefreshTokenRepository",
     "MongoRoleRepository",
+    "MongoSaleRepository",
     "MongoSupplierRepository",
     "MongoUserRepository",
     "PasswordResetRepository",
@@ -95,6 +101,7 @@ __all__ = [
     "RefreshTokenRepository",
     "Repositories",
     "RoleRepository",
+    "SaleRepository",
     "SupplierRepository",
     "UserRepository",
     "build_mongo_repositories",

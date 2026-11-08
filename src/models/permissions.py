@@ -32,6 +32,8 @@ class Permission(StrEnum):
     SUPPLIERS_CREATE = "suppliers:create"
     SUPPLIERS_UPDATE = "suppliers:update"
     SUPPLIERS_DELETE = "suppliers:delete"
+    SALES_READ = "sales:read"
+    SALES_CREATE = "sales:create"
 
 
 PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
@@ -55,6 +57,8 @@ PERMISSION_DESCRIPTIONS: dict[Permission, str] = {
     Permission.SUPPLIERS_CREATE: "Dar de alta proveedores",
     Permission.SUPPLIERS_UPDATE: "Editar proveedores",
     Permission.SUPPLIERS_DELETE: "Eliminar proveedores",
+    Permission.SALES_READ: "Ver el historial de ventas",
+    Permission.SALES_CREATE: "Registrar ventas (cobrar)",
 }
 
 ADMIN_ROLE = "admin"
@@ -93,18 +97,22 @@ SYSTEM_ROLES: tuple[SystemRole, ...] = (
             Permission.SUPPLIERS_READ.value,
             Permission.SUPPLIERS_CREATE.value,
             Permission.SUPPLIERS_UPDATE.value,
+            Permission.SALES_READ.value,
+            Permission.SALES_CREATE.value,
         ),
     ),
     SystemRole(
         key="viewer",
         name="Consulta",
         description="Usuario estándar sin permisos de administración (rol por defecto). "
-        "Puede ver el catálogo y cobrar/anotar fiado (pensado para un cajero).",
+        "Puede ver el catálogo, cobrar ventas y anotar fiado (pensado para un cajero).",
         permissions=(
             Permission.PRODUCTS_READ.value,
             Permission.CUSTOMERS_READ.value,
             Permission.CUSTOMERS_CREDIT.value,
             Permission.SUPPLIERS_READ.value,
+            Permission.SALES_READ.value,
+            Permission.SALES_CREATE.value,
         ),
     ),
 )

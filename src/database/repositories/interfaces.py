@@ -16,6 +16,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SaleDocument,
     SupplierDocument,
     UserDocument,
 )
@@ -77,6 +78,10 @@ class ProductRepository(Protocol):
     ) -> tuple[list[ProductDocument], int]:
         """Página de productos (más recientes primero) y total que cumple los filtros."""
 
+    async def adjust_quantity(self, product_id: str, delta: int) -> ProductDocument | None:
+        """Suma `delta` a la existencia de forma ATÓMICA (negativo = se vendió, positivo =
+        se repuso o se revirtió una venta). `None` si no existe."""
+
 
 class CustomerRepository(Protocol):
     async def create(self, customer: CustomerDocument) -> CustomerDocument:
@@ -123,6 +128,19 @@ class CreditMovementRepository(Protocol):
         self, customer_id: str, *, page: int, page_size: int
     ) -> tuple[list[CreditMovementDocument], int]:
         """Página de movimientos del cliente (más recientes primero) y su total."""
+
+
+class SaleRepository(Protocol):
+    """Ventas: solo se inserta y se consulta, nunca se edita ni se borra (es el ticket)."""
+
+    async def create(self, sale: SaleDocument) -> SaleDocument: ...
+
+    async def get(self, sale_id: str) -> SaleDocument | None: ...
+
+    async def list(
+        self, *, customer_id: str | None, page: int, page_size: int
+    ) -> tuple[list[SaleDocument], int]:
+        """Página de ventas (más recientes primero) y total que cumple los filtros."""
 
 
 class RefreshTokenRepository(Protocol):

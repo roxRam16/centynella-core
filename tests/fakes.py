@@ -16,6 +16,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SaleDocument,
     SupplierDocument,
     UserDocument,
     new_id,
@@ -126,8 +127,21 @@ class InMemoryProductRepository:
             return False
         if query:
             needle = query.strip().lower()
-            return needle in product.name.lower() or needle in product.sku.lower()
+            return (
+                needle in product.name.lower()
+                or needle in product.sku.lower()
+                or needle in (product.barcode or "").lower()
+            )
         return True
+
+    async def adjust_quantity(self, product_id: str, delta: int) -> ProductDocument | None:
+        product = self.items.get(product_id)
+        if product is None:
+            return None
+        self.items[product_id] = product.model_copy(
+            update={"quantity": product.quantity + delta, "updated_at": utc_now()}
+        )
+        return self.items[product_id].model_copy(deep=True)
 
 
 class InMemoryCustomerRepository:
@@ -239,6 +253,30 @@ class InMemorySupplierRepository:
         )
 
 
+class InMemorySaleRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, SaleDocument] = {}
+
+    async def create(self, sale: SaleDocument) -> SaleDocument:
+        sale.id = sale.id or new_id()
+        self.items[sale.id] = sale.model_copy(deep=True)
+        return sale
+
+    async def get(self, sale_id: str) -> SaleDocument | None:
+        sale = self.items.get(sale_id)
+        return sale.model_copy(deep=True) if sale else None
+
+    async def list(
+        self, *, customer_id: str | None, page: int, page_size: int
+    ) -> tuple[list[SaleDocument], int]:
+        matches = [
+            s for s in self.items.values() if not customer_id or s.customer_id == customer_id
+        ]
+        matches.sort(key=lambda s: (s.created_at, s.id), reverse=True)
+        start = (page - 1) * page_size
+        return [s.model_copy(deep=True) for s in matches[start : start + page_size]], len(matches)
+
+
 class InMemoryRoleRepository:
     def __init__(self) -> None:
         self.items: dict[str, RoleDocument] = {}
@@ -333,6 +371,7 @@ def build_in_memory_repositories() -> Repositories:
         customers=InMemoryCustomerRepository(),
         credit_movements=InMemoryCreditMovementRepository(),
         suppliers=InMemorySupplierRepository(),
+        sales=InMemorySaleRepository(),
     )
 
 

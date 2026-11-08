@@ -131,6 +131,14 @@ Todos bajo `/api/v1` salvo salud. 🔓 = pública · 🔑 = requiere sesión · 
 | GET | `/customers/{id}/credit-movements` | 🛡 `customers:read` | Historial de fiado (cargos y abonos) |
 | POST | `/customers/{id}/credit-movements` | 🛡 `customers:credit` | Anotar un cargo o un abono |
 
+**Ventas** (`/sales`, punto de venta)
+
+| Método | Ruta | Permiso | Descripción |
+| --- | --- | --- | --- |
+| GET | `/sales` | 🛡 `sales:read` | Listado paginado (`customer_id`, `page`, `page_size`) |
+| POST | `/sales` | 🛡 `sales:create` | Cobra un carrito: descuenta existencia y, si `payment_method` es `store_credit`, anota el cargo en el fiado del cliente (`customer_id` obligatorio en ese caso). "Todo o nada": si no alcanza la existencia o el efectivo no cubre el total, no se descuenta ni se cobra nada |
+| GET | `/sales/{id}` | 🛡 `sales:read` | Ver una venta |
+
 **Proveedores** (`/suppliers`): directorio simple.
 
 | Método | Ruta | Permiso | Descripción |
@@ -300,6 +308,27 @@ Requiere en GitHub (por *Environment* `sandbox` / `production`): secreto `AWS_RO
 4. Nada de frontend en este repo.
 
 ## Historial de cambios
+
+### 0.10.0 — Primer módulo de punto de venta: `POST /sales`
+
+- Nuevo dominio **Venta** (`sales`): cobra un carrito (`items: [{product_id, quantity}]`),
+  descuenta existencia de cada producto y, si `payment_method = "store_credit"`, anota el cargo
+  en el fiado del cliente (`CustomerService.record_movement`, ya existente — no hizo falta tocar
+  `customers`). Formas de pago: `cash` (calcula el cambio), `credit_card`, `debit_card`,
+  `transfer`, `store_credit`.
+- "Todo o nada": valida que haya existencia suficiente de TODAS las líneas antes de descontar una
+  sola unidad; si el efectivo no alcanza o algo falla a medio camino, revierte lo ya descontado.
+  A diferencia de la carga masiva de productos, una venta no admite "mejor esfuerzo" — no tiene
+  sentido cobrar la mitad de un ticket.
+- Cada línea de la venta guarda una COPIA del producto (SKU, nombre, precio) al momento de
+  cobrar: si el precio cambia después, el historial de ventas no se altera.
+- Permisos nuevos `sales:read` y `sales:create`; el rol `viewer` (cajero por defecto) y `manager`
+  ya los incluyen.
+- 12 pruebas nuevas (359 en total, cobertura 91 %).
+- Alcance explícitamente fuera de esta primera versión (ver el mockup de referencia en
+  `centynella-mfe/mockups/crear-venta/`): recargas y servicios, facturar la venta (CFDI),
+  promociones, pedidos (vs. venta directa), pago dividido (varios métodos en una sola venta),
+  asistente con IA.
 
 ### 0.9.1 — Mongo local del `docker compose --profile local` en el puerto 27018
 

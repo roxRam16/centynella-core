@@ -108,6 +108,18 @@ def test_lista_y_busca_productos(client, admin_headers):
     assert body["items"][0]["sku"] == "XYZ-002"
 
 
+def test_busca_por_codigo_de_barras(client, admin_headers):
+    """Un lector USB solo "teclea" el código en el buscador — sin esto no encontraría nada."""
+    create_product(client, admin_headers, sku="ABC-001", barcode="7501234567890")
+    create_product(client, admin_headers, sku="XYZ-002", barcode="7509876543210")
+
+    response = client.get(PRODUCTS_URL, params={"q": "7501234567890"}, headers=admin_headers)
+
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["sku"] == "ABC-001"
+
+
 def test_filtra_por_categoria_y_estado(client, admin_headers):
     create_product(client, admin_headers, sku="A-1", category="Bebidas")
     create_product(client, admin_headers, sku="A-2", category="Limpieza")

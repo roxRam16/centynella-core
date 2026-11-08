@@ -24,6 +24,7 @@ from src.models import (
     ProductDocument,
     RefreshTokenDocument,
     RoleDocument,
+    SaleDocument,
     SupplierDocument,
     UserDocument,
     new_id,
@@ -157,6 +158,14 @@ class MongoProductRepository:
         )
         return [ProductDocument.model_validate(doc) async for doc in cursor], total
 
+    async def adjust_quantity(self, product_id: str, delta: int) -> ProductDocument | None:
+        document = await self._collection.find_one_and_update(
+            {"_id": product_id},
+            {"$inc": {"quantity": delta}, "$set": {"updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return ProductDocument.model_validate(document) if document else None
+
     @staticmethod
     def _criteria(*, query: str | None, category: str | None, status: str | None) -> dict[str, Any]:
         criteria: dict[str, Any] = {}
@@ -165,8 +174,10 @@ class MongoProductRepository:
         if status:
             criteria["status"] = status
         if query:
+            # También el código de barras: así un lector USB (que solo "teclea" el código en el
+            # buscador) encuentra el producto sin integración especial.
             pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
-            criteria["$or"] = [{"name": pattern}, {"sku": pattern}]
+            criteria["$or"] = [{"name": pattern}, {"sku": pattern}, {"barcode": pattern}]
         return criteria
 
 
@@ -272,6 +283,41 @@ class MongoSupplierRepository:
             .limit(page_size)
         )
         return [SupplierDocument.model_validate(doc) async for doc in cursor], total
+
+
+class MongoSaleRepository:
+    """Ventas: solo se inserta y se consulta (el ticket no se edita ni se borra)."""
+
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._collection: AsyncCollection = db["sales"]
+
+    async def ensure_indexes(self) -> None:
+        await self._collection.create_index("customer_id")
+        await self._collection.create_index("created_at")
+
+    async def create(self, sale: SaleDocument) -> SaleDocument:
+        sale.id = sale.id or new_id()
+        await self._collection.insert_one(_dump(sale))
+        return sale
+
+    async def get(self, sale_id: str) -> SaleDocument | None:
+        document = await self._collection.find_one({"_id": sale_id})
+        return SaleDocument.model_validate(document) if document else None
+
+    async def list(
+        self, *, customer_id: str | None, page: int, page_size: int
+    ) -> tuple[list[SaleDocument], int]:
+        criteria: dict[str, Any] = {}
+        if customer_id:
+            criteria["customer_id"] = customer_id
+        total = await self._collection.count_documents(criteria)
+        cursor = (
+            self._collection.find(criteria)
+            .sort([("created_at", DESCENDING), ("_id", DESCENDING)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [SaleDocument.model_validate(doc) async for doc in cursor], total
 
 
 class MongoCreditMovementRepository:
